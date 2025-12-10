@@ -49,6 +49,7 @@ class MainEditorBottombar extends StatelessWidget {
     required this.openEmojiEditor,
     required this.openStickerEditor,
     this.openTimedTextEditor,
+    this.openAudioEditor,
   });
 
   /// Manages the main editor's controllers.
@@ -92,6 +93,10 @@ class MainEditorBottombar extends StatelessWidget {
 
   /// Optional callback for opening the timed text editor.
   final Function()? openTimedTextEditor;
+
+  /// Optional callback for opening the audio editor.
+  final Function()? openAudioEditor;
+
   final double _bottomIconSize = 22.0;
   Color get _foregroundColor => configs.mainEditor.style.bottomBarColor;
   TextStyle get _bottomTextStyle => TextStyle(
@@ -172,14 +177,13 @@ class MainEditorBottombar extends StatelessWidget {
                 icon: Icons.text_fields_outlined,
                 onPressed: openTimedTextEditor!,
               );
-
-            case SubEditorMode.emoji:
-              if (!configs.emojiEditor.enabled) return null;
+            case SubEditorMode.audio:
+              if (openAudioEditor == null) return null;
               return _buildActionButton(
-                key: const ValueKey('open-emoji-editor-btn'),
-                label: configs.i18n.emojiEditor.bottomNavigationBarText,
-                icon: configs.emojiEditor.icons.bottomNavBar,
-                onPressed: openEmojiEditor,
+                key: const ValueKey('open-audio-editor-btn'),
+                label: 'Audio', // TODO: Add to i18n
+                icon: Icons.mic,
+                onPressed: openAudioEditor!,
               );
 
             case SubEditorMode.sticker:
