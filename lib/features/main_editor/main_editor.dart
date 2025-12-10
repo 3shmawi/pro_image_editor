@@ -22,6 +22,7 @@ import '/features/main_editor/widgets/main_editor_bottombar.dart';
 import '/features/main_editor/widgets/main_editor_helper_lines.dart';
 import '/features/main_editor/widgets/main_editor_layers.dart';
 import '/features/main_editor/widgets/main_editor_remove_layer_area.dart';
+import '/features/timed_paint_editor/timed_paint_timing_dialog.dart';
 import '/pro_image_editor.dart';
 import '/shared/mixins/editor_zoom.mixin.dart';
 import '/shared/services/content_recorder/widgets/content_recorder.dart';
@@ -1721,6 +1722,23 @@ class ProImageEditorState extends State<ProImageEditor>
 
     if (result == null) return;
 
+    // Check if we have any new paint layers
+    bool hasNewPaintLayers = false;
+    for (var layer in result.layers) {
+      if (layer.isPaintLayer) {
+        final oldIndex = activeLayers.indexWhere((el) => el.id == layer.id);
+        if (oldIndex == -1) {
+          hasNewPaintLayers = true;
+          break;
+        }
+      }
+    }
+
+    Map<String, int>? paintTiming;
+    if (_isVideoEditor && hasNewPaintLayers) {
+      paintTiming = await _showPaintTimingDialog();
+    }
+
     String lastLayerId = '';
     for (var i = 0; i < result.layers.length; i++) {
       final layer = result.layers[i];
@@ -1730,6 +1748,30 @@ class ProImageEditorState extends State<ProImageEditor>
         layer,
         offset: Offset.zero,
       );
+
+      // If in video context and this is a new paint layer, apply timing
+      if (paintTiming != null && layer.isPaintLayer && oldIndex == -1) {
+        // Convert PaintLayer to TimedPaintLayer
+        final paintLayer = duplicatedLayer as PaintLayer;
+        duplicatedLayer = TimedPaintLayer(
+          startTime: paintTiming['startTime']!,
+          endTime: paintTiming['endTime']!,
+          item: paintLayer.item,
+          rawSize: paintLayer.rawSize,
+          opacity: paintLayer.opacity,
+          offset: paintLayer.offset,
+          rotation: paintLayer.rotation,
+          scale: paintLayer.scale,
+          id: paintLayer.id,
+          flipX: paintLayer.flipX,
+          flipY: paintLayer.flipY,
+          interaction: paintLayer.interaction,
+          meta: paintLayer.meta,
+          boxConstraints: paintLayer.boxConstraints,
+          groupId: paintLayer.groupId,
+        );
+      }
+
       lastLayerId = duplicatedLayer.id;
       addLayer(
         duplicatedLayer,
