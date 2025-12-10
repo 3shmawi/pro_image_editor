@@ -13,6 +13,7 @@ import '/core/mixins/editor_configs_mixin.dart';
 import '/core/models/editor_callbacks/pro_image_editor_callbacks.dart';
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_paint_layer.dart';
 import '/core/models/timed_layers/timed_text_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/features/main_editor/services/layer_interaction_manager.dart';
@@ -146,11 +147,20 @@ class _LayerWidgetState extends State<LayerWidget>
       _layerType = LayerWidgetType.widget;
       _fractionalOffset = configs.stickerEditor.layerFractionalOffset;
     } else if (_layer.isPaintLayer) {
-      var layer = _layer as PaintLayer;
-      _layerType = layer.item.mode == PaintMode.blur ||
-              layer.item.mode == PaintMode.pixelate
-          ? LayerWidgetType.censor
-          : LayerWidgetType.canvas;
+      // Check if it's a TimedPaintLayer first
+      if (_layer.isTimedPaintLayer) {
+        final timedPaintLayer = _layer as TimedPaintLayer;
+        _layerType = timedPaintLayer.item.mode == PaintMode.blur ||
+                timedPaintLayer.item.mode == PaintMode.pixelate
+            ? LayerWidgetType.censor
+            : LayerWidgetType.canvas;
+      } else {
+        var layer = _layer as PaintLayer;
+        _layerType = layer.item.mode == PaintMode.blur ||
+                layer.item.mode == PaintMode.pixelate
+            ? LayerWidgetType.censor
+            : LayerWidgetType.canvas;
+      }
       _fractionalOffset = configs.paintEditor.layerFractionalOffset;
     } else {
       _layerType = LayerWidgetType.unknown;
@@ -267,7 +277,11 @@ class _LayerWidgetState extends State<LayerWidget>
 
   /// Checks if the hit is outside the canvas for certain types of layers.
   bool _isHitOutsideInCanvas() {
-    return _layer.isPaintLayer && !(_layer as PaintLayer).item.hit;
+    if (!_layer.isPaintLayer) return false;
+    if (_layer.isTimedPaintLayer) {
+      return !(_layer as TimedPaintLayer).item.hit;
+    }
+    return !(_layer as PaintLayer).item.hit;
   }
 
   /// Checks if the hit is outside the canvas for certain types of layers.
@@ -296,7 +310,11 @@ class _LayerWidgetState extends State<LayerWidget>
 
   void _onHoverLeave() {
     if (_layer.isPaintLayer) {
-      (_layer as PaintLayer).item.hit = false;
+      if (_layer.isTimedPaintLayer) {
+        (_layer as TimedPaintLayer).item.hit = false;
+      } else {
+        (_layer as PaintLayer).item.hit = false;
+      }
     } else if (_layer.isTextLayer) {
       (_layer as TextLayer).hit = false;
     }
@@ -442,21 +460,41 @@ class _LayerWidgetState extends State<LayerWidget>
           stickerEditorConfigs: stickerEditorConfigs,
         );
       case LayerWidgetType.canvas:
-        content = LayerWidgetPaintItem(
-          layer: _layer as PaintLayer,
-          isSelected: _isSelected,
-          enableHitDetection:
-              _layerInteractionManager?.enabledHitDetection ?? false,
-          onHitChanged: (state) {
-            _lastHitState.value = state;
-          },
-          paintEditorConfigs: widget.configs.paintEditor,
-        );
+        if (_layer.isTimedPaintLayer) {
+          content = LayerWidgetPaintItem(
+            layer: _layer as TimedPaintLayer,
+            isSelected: _isSelected,
+            enableHitDetection:
+                _layerInteractionManager?.enabledHitDetection ?? false,
+            onHitChanged: (state) {
+              _lastHitState.value = state;
+            },
+            paintEditorConfigs: widget.configs.paintEditor,
+          );
+        } else {
+          content = LayerWidgetPaintItem(
+            layer: _layer as PaintLayer,
+            isSelected: _isSelected,
+            enableHitDetection:
+                _layerInteractionManager?.enabledHitDetection ?? false,
+            onHitChanged: (state) {
+              _lastHitState.value = state;
+            },
+            paintEditorConfigs: widget.configs.paintEditor,
+          );
+        }
       case LayerWidgetType.censor:
-        content = LayerWidgetCensorItem(
-          layer: _layer as PaintLayer,
-          censorConfigs: paintEditorConfigs.censorConfigs,
-        );
+        if (_layer.isTimedPaintLayer) {
+          content = LayerWidgetCensorItem(
+            layer: _layer as TimedPaintLayer,
+            censorConfigs: paintEditorConfigs.censorConfigs,
+          );
+        } else {
+          content = LayerWidgetCensorItem(
+            layer: _layer as PaintLayer,
+            censorConfigs: paintEditorConfigs.censorConfigs,
+          );
+        }
       default:
         return const SizedBox.shrink();
     }
