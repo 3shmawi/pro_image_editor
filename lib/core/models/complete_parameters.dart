@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../features/filter_editor/utils/combine_color_matrix_utils.dart';
+import 'capture/layer_capture_result.dart';
 import 'layers/layer.dart';
 
 /// A data class that contains all parameters needed for applying visual
@@ -25,7 +26,11 @@ class CompleteParameters {
     required this.image,
     required this.isTransformed,
     required this.layers,
+    this.layerCaptures,
+    this.keepOriginalAudio = false,
   });
+
+  final bool keepOriginalAudio;
 
   /// The blur strength to apply (in logical pixels).
   final double blur;
@@ -89,6 +94,26 @@ class CompleteParameters {
   /// rendered on top of the video during export.
   final List<Layer> layers;
 
+  /// Optional list of individually captured layers with their image bytes.
+  ///
+  /// Each [LayerCaptureResult] contains a layer and its rendered image bytes.
+  /// This allows each layer to be exported separately, which is useful for:
+  /// - Video rendering with layers as separate tracks
+  /// - Advanced compositing workflows
+  /// - Layer-based animations
+  ///
+  /// If null or empty, layers should be rendered from the [layers] list.
+  /// If provided, contains pre-rendered images for each layer.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// for (final capture in parameters.layerCaptures ?? []) {
+  ///   print('Layer ${capture.layer.id}: ${capture.imageBytes.length} bytes');
+  ///   await File('layer_${capture.layer.id}.png').writeAsBytes(capture.imageBytes);
+  /// }
+  /// ```
+  final List<LayerCaptureResult>? layerCaptures;
+
   /// Creates a copy of this [CompleteParameters] object with optional new
   /// values for specific fields.
   CompleteParameters copyWith({
@@ -107,6 +132,7 @@ class CompleteParameters {
     Uint8List? image,
     bool? isTransformed,
     List<Layer>? layers,
+    List<LayerCaptureResult>? layerCaptures,
   }) {
     return CompleteParameters(
       blur: blur ?? this.blur,
@@ -125,6 +151,7 @@ class CompleteParameters {
       image: image ?? this.image,
       isTransformed: isTransformed ?? this.isTransformed,
       layers: layers ?? this.layers,
+      layerCaptures: layerCaptures ?? this.layerCaptures,
     );
   }
 
@@ -146,7 +173,8 @@ class CompleteParameters {
         other.flipY == flipY &&
         other.image == image &&
         other.isTransformed == isTransformed &&
-        listEquals(other.layers, layers);
+        listEquals(other.layers, layers) &&
+        other.layerCaptures == layerCaptures;
   }
 
   @override
@@ -164,6 +192,7 @@ class CompleteParameters {
         flipY.hashCode ^
         image.hashCode ^
         isTransformed.hashCode ^
-        layers.hashCode;
+        layers.hashCode ^
+        layerCaptures.hashCode;
   }
 }
