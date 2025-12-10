@@ -13,12 +13,14 @@ import '/shared/utils/parser/bool_parser.dart';
 import '/shared/utils/parser/double_parser.dart';
 import '/shared/utils/unique_id_generator.dart';
 import '../editor_image.dart';
+import 'audio_layer.dart';
 import 'emoji_layer.dart';
 import 'layer_interaction.dart';
 import 'paint_layer.dart';
 import 'text_layer.dart';
 import 'widget_layer.dart';
 
+export 'audio_layer.dart';
 export 'emoji_layer.dart';
 export 'paint_layer.dart';
 export 'text_layer.dart';
@@ -91,6 +93,8 @@ class Layer {
     /// Determines the layer type from the map and returns the appropriate
     /// LayerData subclass.
     switch (map[keyConverter('type')]) {
+      case 'audio':
+        return AudioLayer.fromMap(map, id: id ?? '');
       case 'text':
         // Returns a TextLayer instance when type is 'text'.
         return TextLayer.fromMap(layer, map, keyConverter: keyConverter);
@@ -168,6 +172,12 @@ class Layer {
   /// text layer with start and end times.
   bool get isTimedTextLayer => false;
 
+  /// Indicates whether this layer is a timed paint layer.
+  ///
+  /// Subclasses can override this to return `true` if the layer is a timed
+  /// paint layer with start and end times.
+  bool get isTimedPaintLayer => false;
+
   /// Indicates whether this layer is a [PaintLayer].
   ///
   /// Subclasses can override this to return `true` if the layer contains
@@ -185,6 +195,9 @@ class Layer {
   /// Subclasses can override this to return `true` if the layer hosts a
   /// Flutter widget or sticker.
   bool get isWidgetLayer => false;
+
+  /// Indicates whether this layer is an [AudioLayer].
+  bool get isAudioLayer => false;
 
   /// Converts this transform object to a Map.
   ///
