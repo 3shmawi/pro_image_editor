@@ -3,6 +3,7 @@ import 'dart:ui';
 
 // Project imports:
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_text_layer.dart';
 
 /// A class responsible for managing layers in an image editing environment.
 ///
@@ -18,6 +19,9 @@ class LayerCopyManager {
   /// unchanged.
   Layer copyLayer(Layer layer) {
     if (layer.isTextLayer) {
+    if (layer.isTimedTextLayer) {
+      return createCopyTimedTextLayer(layer as TimedTextLayer);
+    } else if (layer.isTextLayer) {
       return createCopyTextLayer(layer as TextLayer);
     } else if (layer.isEmojiLayer) {
       return createCopyEmojiLayer(layer as EmojiLayer);
@@ -41,6 +45,14 @@ class LayerCopyManager {
     bool enableCopyKey = false,
   }) {
     if (layer.isTextLayer) {
+    if (layer.isTimedTextLayer) {
+      return createCopyTimedTextLayer(
+        layer as TimedTextLayer,
+        enableCopyId: enableCopyId,
+        enableCopyKey: enableCopyKey,
+        offset: offset,
+      );
+    } else if (layer.isTextLayer) {
       return createCopyTextLayer(
         layer as TextLayer,
         enableCopyId: enableCopyId,
@@ -95,6 +107,51 @@ class LayerCopyManager {
           ),
         )
         .toList();
+  }
+
+  /// Create a copy of a TimedTextLayer instance.
+  TimedTextLayer createCopyTimedTextLayer(
+    TimedTextLayer layer, {
+    bool enableCopyId = true,
+    bool enableCopyKey = true,
+    Offset offset = Offset.zero,
+  }) {
+    return TimedTextLayer(
+      id: enableCopyId ? layer.id : null,
+      key: enableCopyKey ? layer.key : null,
+      text: layer.text,
+      align: layer.align,
+      fontScale: layer.fontScale,
+      background: Color.from(
+        red: layer.background.r,
+        green: layer.background.g,
+        blue: layer.background.b,
+        alpha: layer.background.a,
+      ),
+      color: Color.from(
+        red: layer.color.r,
+        green: layer.color.g,
+        blue: layer.color.b,
+        alpha: layer.color.a,
+      ),
+      colorMode: layer.colorMode,
+      offset: Offset(
+        layer.offset.dx + offset.dx,
+        layer.offset.dy + offset.dy,
+      ),
+      rotation: layer.rotation,
+      textStyle: layer.textStyle,
+      scale: layer.scale,
+      flipX: layer.flipX,
+      flipY: layer.flipY,
+      meta: layer.meta,
+      maxTextWidth: layer.maxTextWidth,
+      customSecondaryColor: layer.customSecondaryColor,
+      interaction: layer.interaction.copyWith(),
+      boxConstraints: layer.boxConstraints?.copyWith(),
+      startTime: layer.startTime,
+      endTime: layer.endTime,
+    )..groupId = layer.groupId;
   }
 
   /// Create a copy of a TextLayer instance.
