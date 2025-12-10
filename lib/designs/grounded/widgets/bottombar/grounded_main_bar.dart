@@ -223,6 +223,21 @@ class GroundedMainBarState extends State<GroundedMainBar>
                 ),
                 onPressed: widget.editor.openTextEditor,
               );
+            case SubEditorMode.timedText:
+              if (!textEditorConfigs.enabled) return null;
+              return FlatIconTextButton(
+                spacing: 7,
+                label: Text(
+                  "Timed Text",
+                  style: _bottomTextStyle,
+                ),
+                icon: Icon(
+                  Icons.text_fields_outlined,
+                  size: _bottomIconSize,
+                  color: _foreGroundColor,
+                ),
+                onPressed: widget.editor.openTimedTextEditor,
+              );
 
             case SubEditorMode.cropRotate:
               if (!cropRotateEditorConfigs.enabled) return null;
