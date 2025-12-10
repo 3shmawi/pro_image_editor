@@ -80,7 +80,8 @@ class TextEditorInput extends StatefulWidget {
   final Color backgroundColor;
 
   /// The text layer being edited, if applicable.
-  final TextLayer? layer;
+  /// Can be either a [TextLayer] or [TimedTextLayer].
+  final Layer? layer;
 
   /// The focus node for managing input focus.
   final FocusNode focusNode;
