@@ -52,6 +52,7 @@ export 'features/main_editor/main_editor.dart';
 export 'features/paint_editor/paint_editor.dart';
 export 'features/sticker_editor/sticker_editor.dart';
 export 'features/text_editor/text_editor.dart';
+export 'features/timed_text_editor/timed_text_editor.dart';
 export 'shared/services/content_recorder/utils/generate_high_quality_image.dart';
 
 /// Utils
