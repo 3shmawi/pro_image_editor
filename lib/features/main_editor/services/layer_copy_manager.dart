@@ -3,6 +3,7 @@ import 'dart:ui';
 
 // Project imports:
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_paint_layer.dart';
 import '/core/models/timed_layers/timed_text_layer.dart';
 
 /// A class responsible for managing layers in an image editing environment.
@@ -18,9 +19,10 @@ class LayerCopyManager {
   /// If the layer type is not recognized, it returns the original layer
   /// unchanged.
   Layer copyLayer(Layer layer) {
-    if (layer.isTextLayer) {
     if (layer.isTimedTextLayer) {
       return createCopyTimedTextLayer(layer as TimedTextLayer);
+    } else if (layer.isTimedPaintLayer) {
+      return createCopyTimedPaintLayer(layer as TimedPaintLayer);
     } else if (layer.isTextLayer) {
       return createCopyTextLayer(layer as TextLayer);
     } else if (layer.isEmojiLayer) {
@@ -44,10 +46,16 @@ class LayerCopyManager {
     bool enableCopyId = false,
     bool enableCopyKey = false,
   }) {
-    if (layer.isTextLayer) {
     if (layer.isTimedTextLayer) {
       return createCopyTimedTextLayer(
         layer as TimedTextLayer,
+        enableCopyId: enableCopyId,
+        enableCopyKey: enableCopyKey,
+        offset: offset,
+      );
+    } else if (layer.isTimedPaintLayer) {
+      return createCopyTimedPaintLayer(
+        layer as TimedPaintLayer,
         enableCopyId: enableCopyId,
         enableCopyKey: enableCopyKey,
         offset: offset,
@@ -147,6 +155,35 @@ class LayerCopyManager {
       meta: layer.meta,
       maxTextWidth: layer.maxTextWidth,
       customSecondaryColor: layer.customSecondaryColor,
+      interaction: layer.interaction.copyWith(),
+      boxConstraints: layer.boxConstraints?.copyWith(),
+      startTime: layer.startTime,
+      endTime: layer.endTime,
+    )..groupId = layer.groupId;
+  }
+
+  /// Create a copy of a TimedPaintLayer instance.
+  TimedPaintLayer createCopyTimedPaintLayer(
+    TimedPaintLayer layer, {
+    bool enableCopyId = true,
+    bool enableCopyKey = true,
+    Offset offset = Offset.zero,
+  }) {
+    return TimedPaintLayer(
+      id: enableCopyId ? layer.id : null,
+      key: enableCopyKey ? layer.key : null,
+      offset: Offset(
+        layer.offset.dx + offset.dx,
+        layer.offset.dy + offset.dy,
+      ),
+      rotation: layer.rotation,
+      scale: layer.scale,
+      flipX: layer.flipX,
+      flipY: layer.flipY,
+      meta: layer.meta,
+      item: layer.item.copy(),
+      rawSize: layer.rawSize,
+      opacity: layer.opacity,
       interaction: layer.interaction.copyWith(),
       boxConstraints: layer.boxConstraints?.copyWith(),
       startTime: layer.startTime,
