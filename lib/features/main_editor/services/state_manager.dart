@@ -2,6 +2,7 @@ import '/core/models/editor_image.dart';
 import '/core/models/history/state_history.dart';
 import '/core/models/layers/layer.dart';
 import '/core/models/multi_threading/thread_capture_model.dart';
+import '/core/models/timed_layers/timed_layer.dart';
 import '/features/filter_editor/types/filter_matrix.dart';
 import '/features/tune_editor/models/tune_adjustment_matrix.dart';
 import '../../crop_rotate_editor/models/transform_configs.dart';
@@ -329,5 +330,79 @@ class StateManager {
         }
       }
     }
+  }
+
+  // ============================================================================
+  // Layer Lookup Methods
+  // ============================================================================
+
+  /// Gets a layer by its ID from the active layers.
+  ///
+  /// Returns the layer if found, otherwise returns null.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layer = stateManager.getLayerById('layer-123');
+  /// if (layer != null) {
+  ///   print('Found layer: ${layer.id}');
+  /// }
+  /// ```
+  Layer? getLayerById(String layerId) {
+    try {
+      return activeLayers.firstWhere((layer) => layer.id == layerId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Gets multiple layers by their IDs from the active layers.
+  ///
+  /// Returns a list of layers that match the provided IDs.
+  /// Layers that are not found are skipped.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layers = stateManager.getLayersByIds(['layer-1', 'layer-2']);
+  /// print('Found ${layers.length} layers');
+  /// ```
+  List<Layer> getLayersByIds(List<String> layerIds) {
+    return activeLayers.where((layer) => layerIds.contains(layer.id)).toList();
+  }
+
+  /// Gets all layers of a specific type from the active layers.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Get all text layers
+  /// final textLayers = stateManager.getLayersByType<TextLayer>();
+  ///
+  /// // Get all timed layers
+  /// final timedLayers = stateManager.getLayersByType<TimedLayer>();
+  /// ```
+  List<T> getLayersByType<T extends Layer>() {
+    return activeLayers.whereType<T>().toList();
+  }
+
+  /// Gets all layers that should be visible at a specific time.
+  ///
+  /// For timed layers, checks if they should be visible at the given time.
+  /// For regular (non-timed) layers, they are always considered visible.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Get layers visible at 5 seconds
+  /// final visibleLayers = stateManager.getLayersVisibleAtTime(5000);
+  /// ```
+  ///
+  /// [currentTime] - The time in milliseconds to check layer visibility.
+  ///
+  /// Returns a list of layers that should be visible at the specified time.
+  List<Layer> getLayersVisibleAtTime(int currentTime) {
+    return activeLayers.where((layer) {
+      if (layer is TimedLayer) {
+        return layer.isVisibleAtTime(currentTime);
+      }
+      return true; // Non-timed layers are always visible
+    }).toList();
   }
 }
