@@ -162,6 +162,12 @@ class Layer {
   /// a text-based element.
   bool get isTextLayer => false;
 
+  /// Indicates whether this layer is a timed text layer.
+  ///
+  /// Subclasses can override this to return `true` if the layer is a timed
+  /// text layer with start and end times.
+  bool get isTimedTextLayer => false;
+
   /// Indicates whether this layer is a [PaintLayer].
   ///
   /// Subclasses can override this to return `true` if the layer contains
