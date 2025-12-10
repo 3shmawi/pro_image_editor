@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '/core/models/editor_callbacks/pro_image_editor_callbacks.dart';
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_text_layer.dart';
 import '/core/services/keyboard_service.dart';
 import '/core/services/mouse_service.dart';
 import '/shared/utils/unique_id_generator.dart';
@@ -22,6 +23,7 @@ class MainEditorLayersService {
     required this.callbacks,
     required this.controllers,
     required this.onTextLayerTap,
+    required this.onTimedTextLayerTap,
     required this.onEditPaintLayer,
     required this.onUpdateState,
     required this.onCheckInteractiveViewer,
@@ -70,6 +72,9 @@ class MainEditorLayersService {
   /// Callback triggered when a text layer is tapped.
   final Function(TextLayer layer) onTextLayerTap;
 
+  /// Callback triggered when a timed text layer is tapped.
+  final Function(TimedTextLayer layer) onTimedTextLayerTap;
+
   /// Callback triggered when a paint layer is edited.
   final Function(PaintLayer layer) onEditPaintLayer;
 
@@ -104,7 +109,9 @@ class MainEditorLayersService {
 
   /// Handles edit interaction for different layer types.
   void handleEditTap(Layer layer) {
-    if (layer.isTextLayer) {
+    if (layer.isTimedTextLayer) {
+      onTimedTextLayerTap(layer as TimedTextLayer);
+    } else if (layer.isTextLayer) {
       onTextLayerTap(layer as TextLayer);
     } else if (layer.isPaintLayer) {
       onEditPaintLayer(layer as PaintLayer);
@@ -149,7 +156,9 @@ class MainEditorLayersService {
 
       onCheckInteractiveViewer();
     } else if (layer.interaction.enableEdit) {
-      if (layer.isTextLayer && configs.textEditor.enableEdit) {
+      if (layer.isTimedTextLayer && configs.textEditor.enableEdit) {
+        onTimedTextLayerTap(layer as TimedTextLayer);
+      } else if (layer.isTextLayer && configs.textEditor.enableEdit) {
         onTextLayerTap(layer as TextLayer);
       } else if (layer.isPaintLayer && configs.paintEditor.enableEdit) {
         onEditPaintLayer(layer as PaintLayer);

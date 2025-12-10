@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '/core/models/editor_callbacks/pro_image_editor_callbacks.dart';
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_layer.dart';
 import '/core/services/mouse_service.dart';
 import '/core/utils/size_utils.dart';
 import '/features/main_editor/controllers/main_editor_controllers.dart';
 import '/features/main_editor/services/layer_interaction_manager.dart';
 import '/features/main_editor/services/sizes_manager.dart';
 import '/plugins/defer_pointer/defer_pointer.dart';
+import '/shared/controllers/video_controller.dart';
 import '/shared/widgets/extended/mouse_region/extended_rebuild_mouse_region.dart';
 import '/shared/widgets/layer/layer_widget.dart';
 import '../main_editor.dart';
@@ -31,12 +33,14 @@ class MainEditorLayers extends StatefulWidget {
     required this.isSubEditorOpen,
     required this.onCheckInteractiveViewer,
     required this.onTextLayerTap,
+    required this.onTimedTextLayerTap,
     required this.onEditPaintLayer,
     required this.state,
     required this.onContextMenuToggled,
     required this.onDuplicateLayer,
     required this.mouseService,
     required this.dragSelectionService,
+    this.videoController,
   });
 
   /// Represents the current state of the editor.
@@ -78,6 +82,9 @@ class MainEditorLayers extends StatefulWidget {
   /// Callback triggered when a text layer is tapped.
   final Function(TextLayer layer) onTextLayerTap;
 
+  /// Callback triggered when a timed text layer is tapped.
+  final Function(TimedTextLayer layer) onTimedTextLayerTap;
+
   /// A callback function that is triggered when a paint layer is edited.
   final Function(PaintLayer layer) onEditPaintLayer;
 
@@ -86,6 +93,9 @@ class MainEditorLayers extends StatefulWidget {
 
   /// Callback triggered when the context menu is toggled.
   final Function(bool isOpen)? onContextMenuToggled;
+
+  /// The video controller, if available.
+  final ProVideoController? videoController;
 
   @override
   State<MainEditorLayers> createState() => _MainEditorLayersState();
@@ -111,6 +121,7 @@ class _MainEditorLayersState extends State<MainEditorLayers> {
     },
     controllers: widget.controllers,
     onTextLayerTap: widget.onTextLayerTap,
+    onTimedTextLayerTap: widget.onTimedTextLayerTap,
     onEditPaintLayer: widget.onEditPaintLayer,
   );
 
@@ -158,7 +169,12 @@ class _MainEditorLayersState extends State<MainEditorLayers> {
                     child: Stack(
                       children: [
                         for (Layer layer in widget.activeLayers)
-                          _buildLayerWidget(layer)
+                          if (layer is! AudioLayer &&
+                              (widget.videoController == null ||
+                                  layer is! TimedLayer ||
+                                  layer.isVisibleAtTime(widget.videoController!
+                                      .playTimeNotifier.value.inMilliseconds)))
+                            _buildLayerWidget(layer)
                       ],
                     ),
                   );
