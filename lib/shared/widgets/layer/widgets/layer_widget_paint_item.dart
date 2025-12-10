@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '/core/models/editor_configs/paint_editor/paint_editor_configs.dart';
-import '/core/models/layers/paint_layer.dart';
 import '/features/paint_editor/enums/paint_editor_enum.dart';
 import '/features/paint_editor/widgets/draw_paint_item.dart';
 
@@ -21,7 +20,8 @@ class LayerWidgetPaintItem extends StatelessWidget {
   });
 
   /// The paint layer represented by this widget.
-  final PaintLayer layer;
+  /// Can be either PaintLayer or TimedPaintLayer.
+  final dynamic layer;
 
   /// Whether the paint layer is currently selected.
   final bool isSelected;

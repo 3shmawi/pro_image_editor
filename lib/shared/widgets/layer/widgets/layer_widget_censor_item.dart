@@ -1,11 +1,10 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '/core/models/editor_configs/paint_editor/censor_configs.dart';
-import '/core/models/layers/paint_layer.dart';
 import '/features/paint_editor/enums/paint_editor_enum.dart';
-import '/shared/widgets/censor/blur_area_item.dart';
-import '/shared/widgets/censor/pixelate_area_item.dart';
+import '../../censor/blur_area_item.dart';
+import '../../censor/pixelate_area_item.dart';
 
 /// A widget representing a censor layer in the sticker editor.
 ///
@@ -23,7 +22,8 @@ class LayerWidgetCensorItem extends StatelessWidget {
   final CensorConfigs censorConfigs;
 
   /// The paint layer that determines the censor effect.
-  final PaintLayer layer;
+  /// Can be either PaintLayer or TimedPaintLayer.
+  final dynamic layer;
 
   @override
   Widget build(BuildContext context) {
