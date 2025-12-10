@@ -243,7 +243,7 @@ class _FrostedGlassActionBarState extends State<FrostedGlassActionBar> {
                 icon:
                     Icon(widget.editor.stickerEditorConfigs.icons.bottomNavBar),
               );
-            case SubEditorMode.sticker:
+            default:
               return null;
           }
         })
