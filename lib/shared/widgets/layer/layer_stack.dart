@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_layer.dart';
 import '/core/models/transform_helper.dart';
 import '/features/crop_rotate_editor/enums/crop_mode.enum.dart';
 import '/features/crop_rotate_editor/widgets/crop_layer_painter.dart';
@@ -43,6 +44,7 @@ class LayerStack extends StatelessWidget {
       mainImageSize: Size.zero,
     ),
     this.clipBehavior = Clip.hardEdge,
+    this.currentTime,
   });
 
   /// The outside overlay color for layers.
@@ -91,6 +93,10 @@ class LayerStack extends StatelessWidget {
       transformHelper.transformConfigs?.isNotEmpty == true
           ? transformHelper.transformConfigs
           : null;
+
+  /// The current time of the video in milliseconds.
+  final int? currentTime;
+
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -103,6 +109,11 @@ class LayerStack extends StatelessWidget {
                 alignment: Alignment.center,
                 clipBehavior: clipBehavior,
                 children: layers.map((layerItem) {
+                  if (currentTime != null && layerItem is TimedLayer) {
+                    if (!layerItem.isVisibleAtTime(currentTime!)) {
+                      return const SizedBox.shrink();
+                    }
+                  }
                   return LayerWidget(
                     key: enableLayerKey ? layerItem.key : null,
                     layer: layerItem,
