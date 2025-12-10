@@ -50,6 +50,7 @@ class MainEditorBottombar extends StatelessWidget {
     required this.openStickerEditor,
     this.openTimedTextEditor,
     this.openAudioEditor,
+    this.openVideoBubbleEditor,
   });
 
   /// Manages the main editor's controllers.
@@ -96,6 +97,9 @@ class MainEditorBottombar extends StatelessWidget {
 
   /// Optional callback for opening the audio editor.
   final Function()? openAudioEditor;
+
+  /// Optional callback for opening the video bubble editor.
+  final Function()? openVideoBubbleEditor;
 
   final double _bottomIconSize = 22.0;
   Color get _foregroundColor => configs.mainEditor.style.bottomBarColor;
@@ -185,14 +189,13 @@ class MainEditorBottombar extends StatelessWidget {
                 icon: Icons.mic,
                 onPressed: openAudioEditor!,
               );
-
-            case SubEditorMode.sticker:
-              if (!configs.stickerEditor.enabled) return null;
+            case SubEditorMode.videoBubble:
+              if (openVideoBubbleEditor == null) return null;
               return _buildActionButton(
-                key: const ValueKey('open-sticker-editor-btn'),
-                label: configs.i18n.stickerEditor.bottomNavigationBarText,
-                icon: configs.stickerEditor.icons.bottomNavBar,
-                onPressed: openStickerEditor,
+                key: const ValueKey('open-video-bubble-editor-btn'),
+                label: 'Video Bubble', // TODO: Add to i18n
+                icon: Icons.picture_in_picture,
+                onPressed: openVideoBubbleEditor!,
               );
           }
         })
