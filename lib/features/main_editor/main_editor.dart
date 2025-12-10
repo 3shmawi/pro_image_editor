@@ -15,6 +15,9 @@ import '/core/models/styles/draggable_sheet_style.dart';
 import '/core/models/timed_layers/timed_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/core/services/mouse_service.dart';
+import '/features/audio_editor/audio_editor_dialog.dart';
+import '/features/audio_editor/widgets/audio_recorder_widget.dart';
+import '/features/audio_editor/widgets/audio_timeline_bar.dart';
 import '/features/main_editor/widgets/main_editor_appbar.dart';
 import '/features/main_editor/widgets/main_editor_background_image.dart';
 import '/features/main_editor/widgets/main_editor_background_video.dart';
@@ -23,6 +26,7 @@ import '/features/main_editor/widgets/main_editor_helper_lines.dart';
 import '/features/main_editor/widgets/main_editor_layers.dart';
 import '/features/main_editor/widgets/main_editor_remove_layer_area.dart';
 import '/features/timed_paint_editor/timed_paint_timing_dialog.dart';
+import '/features/video_bubble_editor/widgets/video_bubble_picker_widget.dart';
 import '/pro_image_editor.dart';
 import '/shared/mixins/editor_zoom.mixin.dart';
 import '/shared/services/content_recorder/widgets/content_recorder.dart';
@@ -1503,6 +1507,44 @@ class ProImageEditorState extends State<ProImageEditor>
     int i = activeLayers.indexWhere((element) => element.id == layerData.id);
     replaceLayer(index: i, layer: updatedLayer);
   }
+
+  /// Handles tap events on audio layers.
+  ///
+  /// This method opens an audio editor dialog for the specified audio layer
+  /// and updates the layer's properties based on the user's input.
+  ///
+  /// [layerData] - The audio layer data to be edited.
+  void _onAudioLayerTap(AudioLayer layerData) async {
+    // Get total duration from video controller or use a default
+    final totalDuration = _isVideoEditor
+        ? widget.videoController?.videoDuration.inMilliseconds ?? 10000
+        : 10000;
+
+    final result = await showDialog(
+      context: context,
+      builder: (context) => AudioEditorDialog(
+        audioLayer: layerData,
+        totalDuration: totalDuration,
+        theme: _theme,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    // Handle deletion
+    if (result == 'delete') {
+      removeLayer(layerData);
+      return;
+    }
+
+    // Handle update
+    if (result is AudioLayer) {
+      int i = activeLayers.indexWhere((element) => element.id == layerData.id);
+      replaceLayer(index: i, layer: result);
+    }
+  }
+
   void _editPaintLayer(PaintLayer layer) async {
     if (layer.isPaintLayer && layer.item.isCensorArea) return;
 
@@ -1986,6 +2028,31 @@ class ProImageEditorState extends State<ProImageEditor>
     mainEditorCallbacks?.handleUpdateUI();
   }
 
+  /// Opens the audio editor.
+  void openAudioEditor() async {
+    if (widget.videoController == null) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return AudioRecorderWidget(
+          configs: configs,
+          onStop: (path, duration) {
+            final layer = AudioLayer(
+              path: path,
+              duration: duration.inMilliseconds,
+              startTime:
+                  widget.videoController!.playTimeNotifier.value.inMilliseconds,
+            );
+
+            addLayer(layer, blockSelectLayer: true);
+            Navigator.pop(context);
+          },
+        );
+      },
+    );
+  }
   /// Opens the filter editor.
   ///
   /// This method allows the user to apply filters to the current image and
@@ -2393,6 +2460,7 @@ class ProImageEditorState extends State<ProImageEditor>
 
         await onCompleteWithParameters?.call(
           CompleteParameters(
+            keepOriginalAudio: keepOriginalAudio.value,
             blur: stateManager.activeBlur,
             matrixFilterList: stateManager.activeFilters,
             matrixTuneAdjustmentsList: stateManager.activeTuneAdjustments
@@ -3291,24 +3359,53 @@ class ProImageEditorState extends State<ProImageEditor>
       );
     }
 
-    return hasSelectedLayers &&
-            configs.layerInteraction.hideToolbarOnInteraction
-        ? null
-        : MainEditorBottombar(
-            controllers: _controllers,
-            configs: configs,
-            sizesManager: sizesManager,
-            bottomBarKey: _bottomBarKey,
-            theme: _theme,
-            openPaintEditor: openPaintEditor,
-            openTextEditor: openTextEditor,
-            openCropRotateEditor: openCropRotateEditor,
-            openTuneEditor: openTuneEditor,
-            openFilterEditor: openFilterEditor,
-            openBlurEditor: openBlurEditor,
-            openEmojiEditor: openEmojiEditor,
-            openStickerEditor: openStickerEditor,
-          );
+    final shouldHide =
+        hasSelectedLayers && configs.layerInteraction.hideToolbarOnInteraction;
+
+    if (shouldHide) return null;
+
+    // Get audio layers
+    final audioLayers = activeLayers.whereType<AudioLayer>().toList();
+    final hasAudioLayers = audioLayers.isNotEmpty && _isVideoEditor;
+
+    final bottomBar = MainEditorBottombar(
+      controllers: _controllers,
+      configs: configs,
+      sizesManager: sizesManager,
+      bottomBarKey: _bottomBarKey,
+      theme: _theme,
+      openPaintEditor: openPaintEditor,
+      openTextEditor: openTextEditor,
+      openCropRotateEditor: openCropRotateEditor,
+      openTuneEditor: openTuneEditor,
+      openFilterEditor: openFilterEditor,
+      openBlurEditor: openBlurEditor,
+      openEmojiEditor: openEmojiEditor,
+      openStickerEditor: openStickerEditor,
+      openTimedTextEditor: _isVideoEditor ? openTimedTextEditor : null,
+      openAudioEditor: _isVideoEditor ? openAudioEditor : null,
+      openVideoBubbleEditor: _isVideoEditor ? openVideoBubbleEditor : null,
+    );
+
+    // If no audio layers, just return the bottom bar
+    if (!hasAudioLayers) return bottomBar;
+
+    // Otherwise, wrap with audio timeline
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AudioTimelineBar(
+          audioLayers: audioLayers,
+          totalDuration:
+              widget.videoController?.videoDuration.inMilliseconds ?? 10000,
+          currentTimeNotifier: widget.videoController!.playTimeNotifier,
+          onAudioLayerTap: _onAudioLayerTap,
+          theme: _theme,
+          thumbnails: widget.videoController?.thumbnailsNotifier,
+        ),
+        bottomBar,
+      ],
+    );
   }
 
   Widget _buildLayers() {
