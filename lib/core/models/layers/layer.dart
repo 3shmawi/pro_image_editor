@@ -18,12 +18,14 @@ import 'emoji_layer.dart';
 import 'layer_interaction.dart';
 import 'paint_layer.dart';
 import 'text_layer.dart';
+import 'video_bubble_layer.dart';
 import 'widget_layer.dart';
 
 export 'audio_layer.dart';
 export 'emoji_layer.dart';
 export 'paint_layer.dart';
 export 'text_layer.dart';
+export 'video_bubble_layer.dart';
 export 'widget_layer.dart';
 
 /// Represents a layer with common properties for widgets.
@@ -95,6 +97,8 @@ class Layer {
     switch (map[keyConverter('type')]) {
       case 'audio':
         return AudioLayer.fromMap(map, id: id ?? '');
+      case 'videoBubble':
+        return VideoBubbleLayer.fromMap(map, id: id ?? '');
       case 'text':
         // Returns a TextLayer instance when type is 'text'.
         return TextLayer.fromMap(layer, map, keyConverter: keyConverter);
@@ -198,6 +202,9 @@ class Layer {
 
   /// Indicates whether this layer is an [AudioLayer].
   bool get isAudioLayer => false;
+
+  /// Indicates whether this layer is a [VideoBubbleLayer].
+  bool get isVideoBubbleLayer => false;
 
   /// Converts this transform object to a Map.
   ///
