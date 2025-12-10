@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/shared/widgets/platform/platform_circular_progress_indicator.dart';
+import '../../audio_editor/widgets/audio_recorder_widget.dart';
 import '../services/state_manager.dart';
 
 /// A custom AppBar for the main editor, providing actions for closing,
@@ -103,13 +104,17 @@ class MainEditorAppBar extends StatelessWidget implements PreferredSizeWidget {
                   child: PlatformCircularProgressIndicator(configs: configs),
                 ),
               )
-            : IconButton(
-                key: const ValueKey('MainEditorDoneButton'),
-                tooltip: i18n.done,
-                icon: Icon(mainEditorConfigs.icons.doneIcon),
-                iconSize: 28,
-                onPressed: doneEditing,
-              ),
+            : ValueListenableBuilder(
+                valueListenable: keepOriginalAudio,
+                builder: (context, value, child) {
+                  return IconButton(
+                    key: const ValueKey('MainEditorDoneButton'),
+                    tooltip: i18n.done,
+                    icon: Icon(mainEditorConfigs.icons.doneIcon),
+                    iconSize: 28,
+                    onPressed: doneEditing,
+                  );
+                }),
       ],
     );
   }
