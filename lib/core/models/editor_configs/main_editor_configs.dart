@@ -43,6 +43,7 @@ class MainEditorConfigs extends ZoomConfigs {
       // SubEditorMode.emoji,
       // SubEditorMode.sticker,
       SubEditorMode.timedText,
+      SubEditorMode.videoBubble,
     ],
     this.style = const MainEditorStyle(),
     this.icons = const MainEditorIcons(),
