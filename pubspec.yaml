@@ -43,6 +43,14 @@ dependencies:
   shared_preferences: ^2.5.3
   vector_math: ^2.1.4
   web: ^1.1.1
+  audioplayers: ^6.0.0
+  path_provider: ^2.1.2
+  permission_handler: ^11.3.0
+  ffmpeg_kit_flutter_new_min_gpl: ^2.1.1
+  record: ^6.1.2
+  image_picker: ^1.2.1
+  video_player: ^2.10.1
+
 
 dev_dependencies:
   flutter_test:

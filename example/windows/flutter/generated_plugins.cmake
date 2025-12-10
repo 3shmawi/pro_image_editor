@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
+  audioplayers_windows
   file_saver
   file_selector_windows
   firebase_core
@@ -11,7 +12,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   gal
   media_kit_libs_windows_video
   media_kit_video
+  permission_handler_windows
   pro_video_editor
+  record_windows
   url_launcher_windows
   volume_controller
 )
