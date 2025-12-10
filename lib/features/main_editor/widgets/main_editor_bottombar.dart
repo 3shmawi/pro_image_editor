@@ -149,11 +149,10 @@ class MainEditorBottombar extends StatelessWidget {
         .map((tool) {
           switch (tool) {
             case SubEditorMode.paint:
-              if (!configs.paintEditor.enabled) return null;
               return _buildActionButton(
                 key: const ValueKey('open-paint-editor-btn'),
-                label: configs.i18n.paintEditor.bottomNavigationBarText,
-                icon: configs.paintEditor.icons.bottomNavBar,
+                label: 'Paint', // TODO: Add to i18n
+                icon: Icons.brush,
                 onPressed: openPaintEditor,
               );
             case SubEditorMode.cropRotate:
