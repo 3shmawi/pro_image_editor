@@ -53,4 +53,7 @@ enum SubEditorMode {
 
   /// The sticker editor.
   sticker,
+
+  /// The timed text editor.
+  timedText,
 }
