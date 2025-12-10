@@ -10,7 +10,9 @@ import '/core/constants/image_constants.dart';
 import '/core/mixins/converted_configs.dart';
 import '/core/mixins/editor_callbacks_mixin.dart';
 import '/core/mixins/editor_configs_mixin.dart';
+import '/core/models/capture/layer_capture_result.dart';
 import '/core/models/styles/draggable_sheet_style.dart';
+import '/core/models/timed_layers/timed_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/core/services/mouse_service.dart';
 import '/features/main_editor/widgets/main_editor_appbar.dart';
@@ -360,12 +362,14 @@ class ProImageEditor extends StatefulWidget
     Key? key,
     ProImageEditorConfigs configs = const ProImageEditorConfigs(),
     required ProImageEditorCallbacks callbacks,
+    EditorImage? editorImage,
   }) {
     return ProImageEditor._(
       key: key,
       videoController: videoController,
       configs: configs,
       callbacks: callbacks,
+      editorImage: editorImage,
     );
   }
 
@@ -1379,6 +1383,125 @@ class ProImageEditorState extends State<ProImageEditor>
     replaceLayer(index: i, layer: updatedLayer);
   }
 
+  /// Handles tap events on a timed text layer.
+  ///
+  /// This method opens a timed text editor for the specified timed text layer
+  /// and updates the layer's properties based on the user's input.
+  ///
+  /// Call this method when you want to edit an existing timed text layer.
+  ///
+  /// [layerData] - The timed text layer data to be edited.
+  /// [totalDuration] - The total duration of the timeline in milliseconds.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// // Find a timed text layer and edit it
+  /// var timedLayer = activeLayers.whereType<TimedTextLayer>().first;
+  /// editTimedTextLayer(timedLayer, totalDuration: 30000);
+  /// ```
+  void editTimedTextLayer(
+    TimedTextLayer layerData, {
+    int totalDuration = 10000,
+  }) async {
+    TimedTextLayer? updatedLayer = await openPage(
+      TimedTextEditor(
+        layer: _layerCopyManager.copyLayer(layerData) as TimedTextLayer,
+        heroTag: layerData.id,
+        configs: configs,
+        theme: _theme,
+        callbacks: callbacks,
+        scaleFactor: textEditorConfigs.enableMainEditorZoomFactor
+            ? interactiveViewer.currentState?.scaleFactor ?? 1.0
+            : 1.0,
+        imageSize: sizesManager.decodedImageSize,
+        totalDuration: totalDuration,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+
+      /// Small Duration is important for a smooth hero animation
+      duration: const Duration(milliseconds: 250),
+    );
+
+    if (!mounted || updatedLayer == null) return;
+
+    updatedLayer
+      ..id = layerData.id
+      ..key = layerData.key
+      ..keyInternalSize = layerData.keyInternalSize
+      ..flipX = layerData.flipX
+      ..flipY = layerData.flipY
+      ..offset = layerData.offset
+      ..scale = layerData.scale
+      ..rotation = layerData.rotation
+      ..boxConstraints = layerData.boxConstraints
+      ..groupId = layerData.groupId
+      ..interaction = layerData.interaction
+      ..meta = layerData.meta;
+
+    if (updatedLayer.text.isEmpty) {
+      removeLayer(layerData);
+      return;
+    }
+
+    int i = activeLayers.indexWhere((element) => element.id == layerData.id);
+    replaceLayer(index: i, layer: updatedLayer);
+  }
+
+  /// Handles tap events on a timed text layer.
+  ///
+  /// This method opens a timed text editor for the specified timed text layer
+  /// and updates the layer's properties based on the user's input.
+  ///
+  /// [layerData] - The timed text layer data to be edited.
+  void _onTimedTextLayerTap(TimedTextLayer layerData) async {
+    // Get total duration from video controller or use a default
+    final totalDuration = _isVideoEditor
+        ? widget.videoController?.videoDuration.inMilliseconds ?? 10000
+        : 10000;
+
+    TimedTextLayer? updatedLayer = await openPage(
+      TimedTextEditor(
+        layer: _layerCopyManager.copyLayer(layerData) as TimedTextLayer,
+        heroTag: layerData.id,
+        configs: configs,
+        theme: _theme,
+        callbacks: callbacks,
+        scaleFactor: textEditorConfigs.enableMainEditorZoomFactor
+            ? interactiveViewer.currentState?.scaleFactor ?? 1.0
+            : 1.0,
+        imageSize: sizesManager.decodedImageSize,
+        totalDuration: totalDuration,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+
+      /// Small Duration is important for a smooth hero animation
+      duration: const Duration(milliseconds: 250),
+    );
+
+    if (!mounted || updatedLayer == null) return;
+
+    updatedLayer
+      ..id = layerData.id
+      ..key = layerData.key
+      ..keyInternalSize = layerData.keyInternalSize
+      ..flipX = layerData.flipX
+      ..flipY = layerData.flipY
+      ..offset = layerData.offset
+      ..scale = layerData.scale
+      ..rotation = layerData.rotation
+      ..boxConstraints = layerData.boxConstraints
+      ..groupId = layerData.groupId
+      ..interaction = layerData.interaction
+      ..meta = layerData.meta;
+
+    if (updatedLayer.text.isEmpty) {
+      removeLayer(layerData);
+      return;
+    }
+
+    int i = activeLayers.indexWhere((element) => element.id == layerData.id);
+    replaceLayer(index: i, layer: updatedLayer);
+  }
   void _editPaintLayer(PaintLayer layer) async {
     if (layer.isPaintLayer && layer.item.isCensorArea) return;
 
@@ -1603,7 +1726,7 @@ class ProImageEditorState extends State<ProImageEditor>
       final layer = result.layers[i];
       final oldIndex = activeLayers.indexWhere((el) => el.id == layer.id);
 
-      final duplicatedLayer = _layerCopyManager.duplicateLayer(
+      Layer duplicatedLayer = _layerCopyManager.duplicateLayer(
         layer,
         offset: Offset.zero,
       );
@@ -1659,6 +1782,59 @@ class ProImageEditorState extends State<ProImageEditor>
 
     setState(() {});
     mainEditorCallbacks?.handleUpdateUI();
+  }
+
+  /// Opens the timed text editor.
+  ///
+  /// This method opens the timed text editor, allowing the user to add or edit
+  /// timed text layers on the image with start and end time controls.
+  ///
+  /// [totalDuration] - The total duration of the timeline in milliseconds.
+  /// [duration] - The animation duration for opening the editor.
+  void openTimedTextEditor({
+    Duration duration = const Duration(milliseconds: 150),
+  }) async {
+    TimedTextLayer? layer = await openPage(
+      TimedTextEditor(
+        configs: configs,
+        theme: _theme,
+        callbacks: callbacks,
+        scaleFactor: textEditorConfigs.enableMainEditorZoomFactor
+            ? interactiveViewer.currentState?.scaleFactor ?? 1.0
+            : 1.0,
+        imageSize: sizesManager.decodedImageSize,
+        totalDuration:
+            widget.videoController?.videoDuration.inMilliseconds ?? 10000,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+      duration: duration,
+    );
+
+    if (layer == null || !mounted) return;
+
+    addLayer(layer, blockSelectLayer: true);
+    _selectLayerAfterHeroIsDone(layer.id);
+
+    setState(() {});
+    mainEditorCallbacks?.handleUpdateUI();
+  }
+
+  /// Shows a dialog for setting timing on paint layers.
+  ///
+  /// Returns a map with 'startTime' and 'endTime' keys, or null if cancelled.
+  Future<Map<String, int>?> _showPaintTimingDialog() async {
+    final totalDuration =
+        widget.videoController?.videoDuration.inMilliseconds ?? 10000;
+
+    return await showDialog<Map<String, int>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => TimedPaintTimingDialog(
+        totalDuration: totalDuration,
+        theme: _theme,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+    );
   }
 
   /// Opens the crop rotate editor.
@@ -2085,16 +2261,24 @@ class ProImageEditorState extends State<ProImageEditor>
     });
   }
 
-  /// Complete the editing process and return the edited image.
+  /// Finishes editing and returns the result.
   ///
-  /// This function is called when the user is done editing the image. If no
-  /// changes have been made or if the image has no additional layers, it
-  /// cancels the editing process and closes the editor. Otherwise, it captures
-  /// the current state of the image, including any applied changes or layers,
-  /// and returns it as a byte array.
+  /// This method is called when the user is done editing the image. It handles
+  /// the final image generation, including applying all changes (layers,
+  /// filters, tune adjustments) and creating the output image.
   ///
-  /// Before returning the edited image, a loading dialog is displayed to
-  /// indicate that the operation is in progress.
+  /// If the editor is processing the final image, this method returns early to
+  /// prevent duplicate operations.
+  ///
+  /// The method performs the following steps:
+  /// 1. Sets the `_isProcessingFinalImage` flag to true.
+  /// 2. Shows a loading dialog if configured.
+  /// 3. Captures the final screenshot of the editor.
+  /// 4. Generates the final image data using `ImageGenerator`.
+  /// 5. Closes the loading dialog.
+  /// 6. Calls the `onImageEditingComplete` callback with the generated image
+  ///    data.
+  /// 7. Closes the editor.
   void doneEditing() async {
     mainEditorCallbacks?.handleDone();
     if (_isProcessingFinalImage) return;
@@ -2149,6 +2333,15 @@ class ProImageEditorState extends State<ProImageEditor>
         Uint8List? bytes = await captureEditorImage();
         await onImageEditingComplete?.call(bytes);
 
+        // Capture each layer individually with its image bytes
+        List<LayerCaptureResult>? layerCaptures;
+        if (activeLayers.isNotEmpty) {
+          final captureCollection = await captureLayersAsCollection(
+            includeBackground: false, // Background is already in 'bytes'
+          );
+          layerCaptures = captureCollection.results;
+        }
+
         final transform = stateManager.transformConfigs;
         final isTransformed = transform.isNotEmpty;
 
@@ -2175,6 +2368,7 @@ class ProImageEditorState extends State<ProImageEditor>
             image: bytes,
             isTransformed: isTransformed,
             layers: activeLayers,
+            layerCaptures: layerCaptures,
           ),
         );
       }
@@ -2228,6 +2422,368 @@ class ProImageEditorState extends State<ProImageEditor>
               : null,
         ) ??
         Uint8List.fromList([]);
+  }
+
+  /// Captures the editor image with only specific layers visible.
+  ///
+  /// This method temporarily hides all layers except those specified in
+  /// [visibleLayerIds], captures the image, then restores the original
+  /// layer visibility.
+  ///
+  /// This is useful for:
+  /// - Rendering individual layers for video compositing
+  /// - Exporting layers separately
+  /// - Creating layer-by-layer animations
+  ///
+  /// Example:
+  /// ```dart
+  /// // Capture only the first layer
+  /// final layerImage = await editorState.captureEditorImageWithLayers(
+  ///   visibleLayerIds: [activeLayers[0].id],
+  /// );
+  /// ```
+  ///
+  /// [visibleLayerIds] - List of layer IDs to keep visible. If empty, captures
+  /// only the background.
+  /// [includeBackground] - Whether to include the background image. Set to false
+  /// to capture layers on transparent background (useful for individual layer export).
+  ///
+  /// Returns a [Uint8List] representing the image with only specified layers.
+  Future<Uint8List> captureEditorImageWithLayers({
+    List<String> visibleLayerIds = const [],
+    bool includeBackground = true,
+  }) async {
+    if (_imageInfos == null) await decodeImage();
+    if (!mounted) return Uint8List.fromList([]);
+
+    // Store original layers list
+    final originalLayers = List<Layer>.from(activeLayers);
+
+    // Create a temporary list with only visible layers
+    final tempLayers = activeLayers
+        .where((layer) => visibleLayerIds.contains(layer.id))
+        .toList();
+
+    // Temporarily replace the active layers
+    stateManager.activeLayers = tempLayers;
+
+    // Force UI update
+    setState(() {});
+
+    // Wait for UI to update
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Capture the image
+    Uint8List imageBytes;
+    if (includeBackground) {
+      // Capture with background
+      imageBytes = await captureEditorImage();
+    } else {
+      // Capture only layers without background (transparent)
+      imageBytes = await _controllers.screenshot.captureFinalScreenshot(
+            imageInfos: _imageInfos!,
+            backgroundScreenshot: null, // No background
+            originalImageBytes: null, // No original image
+          ) ??
+          Uint8List.fromList([]);
+    }
+
+    // Restore original layers
+    stateManager.activeLayers = originalLayers;
+
+    // Restore UI
+    setState(() {});
+
+    return imageBytes;
+  }
+
+  /// Captures each layer individually and returns a map of layer ID to image.
+  ///
+  /// This method captures the background image, then each layer separately,
+  /// which is perfect for video editing workflows where you need to composite
+  /// layers at different times.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layerImages = await editorState.captureLayersIndividually();
+  ///
+  /// // layerImages contains:
+  /// // 'background' -> background image bytes
+  /// // 'layer-id-1' -> first layer image bytes
+  /// // 'layer-id-2' -> second layer image bytes
+  /// // etc.
+  /// ```
+  ///
+  /// [includeBackground] - Whether to include a 'background' entry with just
+  /// the background image (no layers).
+  ///
+  /// Returns a Map of layer ID to image bytes.
+  Future<Map<String, Uint8List>> captureLayersIndividually({
+    bool includeBackground = true,
+  }) async {
+    final result = <String, Uint8List>{};
+
+    // Capture background only (no layers)
+    if (includeBackground) {
+      result['background'] = await captureEditorImageWithLayers(
+        visibleLayerIds: [],
+      );
+    }
+
+    // Capture each layer individually (without background)
+    for (var layer in activeLayers) {
+      result[layer.id] = await captureEditorImageWithLayers(
+        visibleLayerIds: [layer.id],
+        includeBackground: false, // Capture layer only, transparent background
+      );
+    }
+
+    return result;
+  }
+
+  /// Captures each layer individually and returns a structured result.
+  ///
+  /// This method is similar to [captureLayersIndividually] but returns
+  /// a [LayerCaptureCollection] which provides better structure and
+  /// additional functionality for working with captured layers.
+  ///
+  /// Example:
+  /// ```dart
+  /// final captures = await editorState.captureLayersAsCollection();
+  ///
+  /// // Access by layer ID
+  /// final textLayer = captures.getByLayerId('layer-123');
+  /// if (textLayer != null) {
+  ///   await File('text-layer.png').writeAsBytes(textLayer.imageBytes);
+  /// }
+  ///
+  /// // Convert to map for backward compatibility
+  /// final imageMap = captures.toMap();
+  /// ```
+  ///
+  /// [includeBackground] - Whether to include the background image.
+  ///
+  /// Returns a [LayerCaptureCollection] containing all captured layers.
+  Future<LayerCaptureCollection> captureLayersAsCollection({
+    bool includeBackground = true,
+  }) async {
+    final results = <LayerCaptureResult>[];
+    Uint8List? background;
+
+    // Capture background only (no layers)
+    if (includeBackground) {
+      background = await captureEditorImageWithLayers(
+        visibleLayerIds: [],
+      );
+    }
+
+    // Capture each layer individually (without background)
+    for (var layer in activeLayers) {
+      if (layer is AudioLayer || layer is VideoBubbleLayer) continue;
+      final bytes = await captureEditorImageWithLayers(
+        visibleLayerIds: [layer.id],
+        includeBackground: false, // Capture layer only, transparent background
+      );
+
+      results.add(LayerCaptureResult(
+        layer: layer,
+        imageBytes: bytes,
+      ));
+    }
+
+    return LayerCaptureCollection(
+      results: results,
+      backgroundImage: background,
+    );
+  }
+
+  /// Captures timed layers at a specific time point.
+  ///
+  /// This method captures only the layers that should be visible at the given
+  /// [currentTime], which is perfect for video rendering where different layers
+  /// appear at different times.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Capture what should be visible at 5 seconds
+  /// final frameImage = await editorState.captureTimedLayersAtTime(
+  ///   currentTime: 5000, // 5 seconds in milliseconds
+  /// );
+  /// ```
+  ///
+  /// [currentTime] - The time in milliseconds to check layer visibility.
+  /// [includeNonTimedLayers] - Whether to include regular (non-timed) layers.
+  ///
+  /// Returns a [Uint8List] representing the image at the specified time.
+  Future<Uint8List> captureTimedLayersAtTime({
+    required int currentTime,
+    bool includeNonTimedLayers = true,
+  }) async {
+    final visibleLayerIds = <String>[];
+
+    for (var layer in activeLayers) {
+      // Check if it's a timed layer
+      if (layer is TimedLayer) {
+        // Only include if visible at current time
+        if (layer.isVisibleAtTime(currentTime)) {
+          visibleLayerIds.add(layer.id);
+        }
+      } else if (includeNonTimedLayers) {
+        // Include non-timed layers if requested
+        visibleLayerIds.add(layer.id);
+      }
+    }
+
+    return await captureEditorImageWithLayers(
+      visibleLayerIds: visibleLayerIds,
+    );
+  }
+
+  /// Gets a layer by its ID from the active layers list.
+  ///
+  /// This method delegates to [StateManager.getLayerById].
+  ///
+  /// Returns the layer if found, otherwise returns null.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layer = editorState.getLayerById('layer-123');
+  /// if (layer != null) {
+  ///   print('Found layer: ${layer.id}');
+  /// }
+  /// ```
+  Layer? getLayerById(String layerId) => stateManager.getLayerById(layerId);
+
+  /// Gets all layers by their IDs from the active layers list.
+  ///
+  /// This method delegates to [StateManager.getLayersByIds].
+  ///
+  /// Returns a list of layers that match the provided IDs.
+  /// Layers that are not found are skipped.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layers = editorState.getLayersByIds(['layer-1', 'layer-2']);
+  /// print('Found ${layers.length} layers');
+  /// ```
+  List<Layer> getLayersByIds(List<String> layerIds) =>
+      stateManager.getLayersByIds(layerIds);
+
+  /// Gets all layers of a specific type from the active layers.
+  ///
+  /// This method delegates to [StateManager.getLayersByType].
+  ///
+  /// Example:
+  /// ```dart
+  /// // Get all text layers
+  /// final textLayers = editorState.getLayersByType<TextLayer>();
+  ///
+  /// // Get all timed layers
+  /// final timedLayers = editorState.getLayersByType<TimedLayer>();
+  /// ```
+  List<T> getLayersByType<T extends Layer>() =>
+      stateManager.getLayersByType<T>();
+
+  /// Gets all layers that should be visible at a specific time.
+  ///
+  /// This method delegates to [StateManager.getLayersVisibleAtTime].
+  ///
+  /// For timed layers, checks if they should be visible at the given time.
+  /// For regular (non-timed) layers, they are always considered visible.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Get layers visible at 5 seconds
+  /// final visibleLayers = editorState.getLayersVisibleAtTime(5000);
+  /// ```
+  ///
+  /// [currentTime] - The time in milliseconds to check layer visibility.
+  ///
+  /// Returns a list of layers that should be visible at the specified time.
+  List<Layer> getLayersVisibleAtTime(int currentTime) =>
+      stateManager.getLayersVisibleAtTime(currentTime);
+
+  /// Captures a single layer by its ID as an image.
+  ///
+  /// This method captures only the specified layer, hiding all other layers.
+  /// Returns the image bytes of the captured layer, or null if the layer
+  /// is not found or capture fails.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layerImage = await editorState.captureLayerById('layer-123');
+  /// if (layerImage != null) {
+  ///   await File('layer.png').writeAsBytes(layerImage);
+  /// }
+  /// ```
+  ///
+  /// [layerId] - The ID of the layer to capture.
+  /// [includeBackground] - Whether to include the background image.
+  ///
+  /// Returns the captured image bytes, or null if the layer is not found.
+  Future<Uint8List?> captureLayerById(
+    String layerId, {
+    bool includeBackground = false,
+  }) async {
+    final layer = getLayerById(layerId);
+    if (layer == null) return null;
+
+    return await captureEditorImageWithLayers(
+      visibleLayerIds: [layerId],
+      includeBackground: includeBackground,
+    );
+  }
+
+  /// Captures multiple layers by their IDs as separate images.
+  ///
+  /// This method captures each specified layer individually and returns
+  /// a map where the key is the layer ID and the value is the image bytes.
+  ///
+  /// Example:
+  /// ```dart
+  /// final layerImages = await editorState.captureLayersByIds(
+  ///   ['layer-1', 'layer-2'],
+  ///   includeBackground: true,
+  /// );
+  ///
+  /// // layerImages contains:
+  /// // 'background' -> background image bytes (if includeBackground is true)
+  /// // 'layer-1' -> first layer image bytes
+  /// // 'layer-2' -> second layer image bytes
+  /// ```
+  ///
+  /// [layerIds] - List of layer IDs to capture.
+  /// [includeBackground] - Whether to include the background image in the result.
+  ///
+  /// Returns a map of layer ID to image bytes.
+  Future<Map<String, Uint8List>> captureLayersByIds(
+    List<String> layerIds, {
+    bool includeBackground = true,
+  }) async {
+    final result = <String, Uint8List>{};
+
+    // Capture background if requested
+    if (includeBackground) {
+      final background = await captureEditorImageWithLayers(
+        visibleLayerIds: [],
+      );
+      result['background'] = background;
+    }
+
+    // Capture each specified layer (without background)
+    for (final layerId in layerIds) {
+      final layer = getLayerById(layerId);
+      if (layer != null) {
+        final bytes = await captureEditorImageWithLayers(
+          visibleLayerIds: [layerId],
+          includeBackground:
+              false, // Capture layer only, transparent background
+        );
+        result[layerId] = bytes;
+      }
+    }
+
+    return result;
   }
 
   /// Closes all active sub-editors within the main editor, including paint,
@@ -2724,10 +3280,12 @@ class ProImageEditorState extends State<ProImageEditor>
       isSubEditorOpen: isSubEditorOpen,
       onCheckInteractiveViewer: _checkInteractiveViewer,
       onTextLayerTap: _onTextLayerTap,
+      onTimedTextLayerTap: _onTimedTextLayerTap,
       onEditPaintLayer: _editPaintLayer,
       state: this,
       dragSelectionService: _layerDragSelectionService,
       mouseService: _mouseService,
+      videoController: widget.videoController,
       onContextMenuToggled: (isOpen) {
         _isContextMenuOpen = isOpen;
       },
