@@ -238,6 +238,34 @@ class GroundedMainBarState extends State<GroundedMainBar>
                 ),
                 onPressed: widget.editor.openTimedTextEditor,
               );
+            case SubEditorMode.audio:
+              return FlatIconTextButton(
+                spacing: 7,
+                label: Text(
+                  "Audio",
+                  style: _bottomTextStyle,
+                ),
+                icon: Icon(
+                  Icons.mic,
+                  size: _bottomIconSize,
+                  color: _foreGroundColor,
+                ),
+                onPressed: widget.editor.openAudioEditor,
+              );
+            case SubEditorMode.videoBubble:
+              return FlatIconTextButton(
+                spacing: 7,
+                label: Text(
+                  "Video Bubble",
+                  style: _bottomTextStyle,
+                ),
+                icon: Icon(
+                  Icons.video_call,
+                  size: _bottomIconSize,
+                  color: _foreGroundColor,
+                ),
+                onPressed: widget.editor.openVideoBubbleEditor,
+              );
 
             case SubEditorMode.cropRotate:
               if (!cropRotateEditorConfigs.enabled) return null;

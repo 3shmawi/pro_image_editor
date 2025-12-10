@@ -56,4 +56,7 @@ enum SubEditorMode {
 
   /// The timed text editor.
   timedText,
+
+  /// The audio editor.
+  audio,
 }
