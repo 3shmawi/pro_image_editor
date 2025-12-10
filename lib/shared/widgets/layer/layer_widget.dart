@@ -13,6 +13,7 @@ import '/core/mixins/editor_configs_mixin.dart';
 import '/core/models/editor_callbacks/pro_image_editor_callbacks.dart';
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
 import '/core/models/layers/layer.dart';
+import '/core/models/timed_layers/timed_text_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/features/main_editor/services/layer_interaction_manager.dart';
 import '/features/main_editor/services/main_editor_layers_service.dart';
@@ -23,6 +24,7 @@ import '/shared/widgets/layer/widgets/layer_widget_censor_item.dart';
 import '/shared/widgets/layer/widgets/layer_widget_emoji_item.dart';
 import '/shared/widgets/layer/widgets/layer_widget_paint_item.dart';
 import '/shared/widgets/layer/widgets/layer_widget_text_item.dart';
+import '/shared/widgets/layer/widgets/layer_widget_timed_text_item.dart';
 import 'interaction_helper/layer_interaction_helper_widget.dart';
 import 'widgets/layer_widget_custom_item.dart';
 
@@ -42,6 +44,7 @@ class LayerWidget extends StatefulWidget with SimpleConfigsAccess {
     this.enableMouseCursor = true,
     this.callbacks = const ProImageEditorCallbacks(),
   });
+
   @override
   final ProImageEditorConfigs configs;
 
@@ -129,7 +132,11 @@ class _LayerWidgetState extends State<LayerWidget>
   void initState() {
     super.initState();
 
-    if (_layer.isTextLayer) {
+    if (_layer.isTimedTextLayer) {
+      // Timed text layers are rendered the same as text layers
+      _layerType = LayerWidgetType.text;
+      _fractionalOffset = configs.textEditor.layerFractionalOffset;
+    } else if (_layer.isTextLayer) {
       _layerType = LayerWidgetType.text;
       _fractionalOffset = configs.textEditor.layerFractionalOffset;
     } else if (_layer.isEmojiLayer) {
@@ -280,7 +287,8 @@ class _LayerWidgetState extends State<LayerWidget>
 
   void _onHoverEnter() {
     if (((!_layer.isPaintLayer || _layerType == LayerWidgetType.censor) &&
-            !_layer.isTextLayer) ||
+            !_layer.isTextLayer &&
+            !_layer.isTimedTextLayer) ||
         _isSelected) {
       _showMoveCursor.value = true;
     }
@@ -405,14 +413,29 @@ class _LayerWidgetState extends State<LayerWidget>
           designMode: designMode,
         );
       case LayerWidgetType.text:
-        content = LayerWidgetTextItem(
-          layer: _layer as TextLayer,
-          textEditorConfigs: textEditorConfigs,
-          showMoveCursor: _showMoveCursor,
-          onHitChanged: (state) {
-            _lastHitState.value = state;
-          },
-        );
+        // Handle both TextLayer and TimedTextLayer
+        if (_layer.isTimedTextLayer) {
+          // For timed text layers, we need to cast to TimedTextLayer first
+          // then access its text properties
+          final timedLayer = _layer as TimedTextLayer;
+          content = LayerWidgetTimedTextItem(
+            layer: timedLayer,
+            textEditorConfigs: textEditorConfigs,
+            showMoveCursor: _showMoveCursor,
+            onHitChanged: (state) {
+              _lastHitState.value = state;
+            },
+          );
+        } else {
+          content = LayerWidgetTextItem(
+            layer: _layer as TextLayer,
+            textEditorConfigs: textEditorConfigs,
+            showMoveCursor: _showMoveCursor,
+            onHitChanged: (state) {
+              _lastHitState.value = state;
+            },
+          );
+        }
       case LayerWidgetType.widget:
         content = LayerWidgetCustomItem(
           layer: _layer as WidgetLayer,
