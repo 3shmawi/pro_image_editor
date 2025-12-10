@@ -59,4 +59,7 @@ enum SubEditorMode {
 
   /// The audio editor.
   audio,
+
+  /// The video bubble editor.
+  videoBubble,
 }
