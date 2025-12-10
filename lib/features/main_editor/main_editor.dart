@@ -2053,6 +2053,37 @@ class ProImageEditorState extends State<ProImageEditor>
       },
     );
   }
+
+  /// Opens the video bubble editor.
+  void openVideoBubbleEditor() async {
+    if (widget.videoController == null) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return VideoBubblePickerWidget(
+          configs: configs,
+          onVideoPicked: (path, duration, corner, scale) {
+            final layer = VideoBubbleLayer(
+              path: path,
+              duration: duration,
+              startTime:
+                  widget.videoController!.playTimeNotifier.value.inMilliseconds,
+              corner: corner,
+              bubbleScale: scale,
+            );
+
+            addLayer(layer, blockSelectLayer: true);
+            Navigator.pop(context);
+            setState(() {});
+          },
+        );
+      },
+    );
+  }
+
   /// Opens the filter editor.
   ///
   /// This method allows the user to apply filters to the current image and
