@@ -31,6 +31,8 @@ class MainEditorBottombar extends StatelessWidget {
   /// - [openBlurEditor]: Callback for opening the blur editor.
   /// - [openEmojiEditor]: Callback for opening the emoji editor.
   /// - [openStickerEditor]: Callback for opening the sticker editor.
+  /// - [openTimedTextEditor]: Optional callback for opening the timed text
+  ///   editor.
   const MainEditorBottombar({
     super.key,
     required this.controllers,
@@ -46,6 +48,7 @@ class MainEditorBottombar extends StatelessWidget {
     required this.openBlurEditor,
     required this.openEmojiEditor,
     required this.openStickerEditor,
+    this.openTimedTextEditor,
   });
 
   /// Manages the main editor's controllers.
@@ -87,6 +90,8 @@ class MainEditorBottombar extends StatelessWidget {
   /// Callback for opening the sticker editor.
   final Function() openStickerEditor;
 
+  /// Optional callback for opening the timed text editor.
+  final Function()? openTimedTextEditor;
   final double _bottomIconSize = 22.0;
   Color get _foregroundColor => configs.mainEditor.style.bottomBarColor;
   TextStyle get _bottomTextStyle => TextStyle(
@@ -151,50 +156,22 @@ class MainEditorBottombar extends StatelessWidget {
                 icon: configs.paintEditor.icons.bottomNavBar,
                 onPressed: openPaintEditor,
               );
-
-            case SubEditorMode.text:
-              if (!configs.textEditor.enabled) return null;
-              return _buildActionButton(
-                key: const ValueKey('open-text-editor-btn'),
-                label: configs.i18n.textEditor.bottomNavigationBarText,
-                icon: configs.textEditor.icons.bottomNavBar,
-                onPressed: openTextEditor,
-              );
-
             case SubEditorMode.cropRotate:
-              if (!configs.cropRotateEditor.enabled) return null;
-              return _buildActionButton(
-                key: const ValueKey('open-crop-rotate-editor-btn'),
-                label: configs.i18n.cropRotateEditor.bottomNavigationBarText,
-                icon: configs.cropRotateEditor.icons.bottomNavBar,
-                onPressed: openCropRotateEditor,
-              );
-
             case SubEditorMode.tune:
-              if (!configs.tuneEditor.enabled) return null;
-              return _buildActionButton(
-                key: const ValueKey('open-tune-editor-btn'),
-                label: configs.i18n.tuneEditor.bottomNavigationBarText,
-                icon: configs.tuneEditor.icons.bottomNavBar,
-                onPressed: openTuneEditor,
-              );
-
             case SubEditorMode.filter:
-              if (!configs.filterEditor.enabled) return null;
-              return _buildActionButton(
-                key: const ValueKey('open-filter-editor-btn'),
-                label: configs.i18n.filterEditor.bottomNavigationBarText,
-                icon: configs.filterEditor.icons.bottomNavBar,
-                onPressed: openFilterEditor,
-              );
-
             case SubEditorMode.blur:
-              if (!configs.blurEditor.enabled) return null;
+            case SubEditorMode.emoji:
+            case SubEditorMode.sticker:
+            case SubEditorMode.text:
+              return null;
+
+            case SubEditorMode.timedText:
+              if (openTimedTextEditor == null) return null;
               return _buildActionButton(
-                key: const ValueKey('open-blur-editor-btn'),
-                label: configs.i18n.blurEditor.bottomNavigationBarText,
-                icon: configs.blurEditor.icons.bottomNavBar,
-                onPressed: openBlurEditor,
+                key: const ValueKey('open-timed-text-editor-btn'),
+                label: 'Timed Text2', // TODO: Add to i18n
+                icon: Icons.text_fields_outlined,
+                onPressed: openTimedTextEditor!,
               );
 
             case SubEditorMode.emoji:
