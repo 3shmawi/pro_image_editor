@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
+import '/core/models/layers/video_bubble_layer.dart';
 import '/features/main_editor/services/ffmpeg_export_service.dart';
 
 /// A widget for picking or recording a video bubble.
@@ -13,6 +14,8 @@ class VideoBubblePickerWidget extends StatefulWidget {
     super.key,
     required this.configs,
     required this.onVideoPicked,
+    this.videoLayers,
+    this.onDeleteLayer,
   });
 
   /// The editor configurations.
@@ -26,6 +29,12 @@ class VideoBubblePickerWidget extends StatefulWidget {
     double scale,
   ) onVideoPicked;
 
+  /// List of existing video bubble layers.
+  final List<VideoBubbleLayer>? videoLayers;
+
+  /// Callback when a video bubble layer is deleted.
+  final Function(VideoBubbleLayer layer)? onDeleteLayer;
+
   @override
   State<VideoBubblePickerWidget> createState() =>
       _VideoBubblePickerWidgetState();
@@ -34,7 +43,9 @@ class VideoBubblePickerWidget extends StatefulWidget {
 class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
   final ImagePicker _picker = ImagePicker();
   VideoPlayerController? _videoController;
+  VideoPlayerController? _previewController;
   String? _videoPath;
+  String? _previewPath;
   VideoBubbleCorner _selectedCorner = VideoBubbleCorner.bottomRight;
   double _bubbleScale = 0.25;
   bool _isLoading = false;
@@ -42,6 +53,7 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
   @override
   void dispose() {
     _videoController?.dispose();
+    _previewController?.dispose();
     super.dispose();
   }
 
@@ -49,14 +61,15 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
     setState(() => _isLoading = true);
 
     try {
-      final XFile? video = await _picker.pickVideo(source: source);
+      final XFile? video = await _picker.pickVideo(
+          source: source, preferredCameraDevice: CameraDevice.front);
 
       if (video != null) {
         _videoPath = video.path;
 
         // Initialize video player to get duration
         _videoController = VideoPlayerController.file(
-          File(video.path),
+          File(_videoPath!),
         );
 
         await _videoController!.initialize();
@@ -72,6 +85,30 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
           SnackBar(content: Text('Error picking video: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _playPreview(String path) async {
+    if (_previewPath == path) {
+      if (_previewController != null) {
+        if (_previewController!.value.isPlaying) {
+          await _previewController!.pause();
+        } else {
+          await _previewController!.play();
+        }
+        setState(() {});
+      }
+    } else {
+      _previewController?.dispose();
+      _previewController = VideoPlayerController.file(File(path));
+      await _previewController!.initialize();
+      await _previewController!.play();
+      _previewController!.addListener(() {
+        if (mounted) setState(() {});
+      });
+      setState(() {
+        _previewPath = path;
+      });
     }
   }
 
@@ -107,6 +144,81 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
             ),
           ),
           const SizedBox(height: 20),
+          if (widget.videoLayers != null && widget.videoLayers!.isNotEmpty) ...[
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.videoLayers!.length,
+                itemBuilder: (context, index) {
+                  final layer = widget.videoLayers![index];
+                  final isPreviewing = _previewPath == layer.path;
+                  return ListTile(
+                    leading: isPreviewing &&
+                            _previewController != null &&
+                            _previewController!.value.isInitialized
+                        ? SizedBox(
+                            width: 50,
+                            height: 50,
+                            child: AspectRatio(
+                              aspectRatio:
+                                  _previewController!.value.aspectRatio,
+                              child: VideoPlayer(_previewController!),
+                            ),
+                          )
+                        : const Icon(Icons.videocam, color: Colors.white),
+                    title: Text(
+                      'Bubble ${index + 1}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    subtitle: Text(
+                      '${_formatDuration(Duration(milliseconds: layer.startTime))} - '
+                      '${_formatDuration(Duration(milliseconds: layer.endTime))}\n'
+                      '${layer.corner.name}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            isPreviewing &&
+                                    _previewController != null &&
+                                    _previewController!.value.isPlaying
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                            color: Colors.white,
+                          ),
+                          onPressed: () => _playPreview(layer.path),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                          ),
+                          onPressed: () {
+                            widget.onDeleteLayer?.call(layer);
+                            setState(() {
+                              widget.videoLayers?.remove(layer);
+                              if (_previewPath == layer.path) {
+                                _previewController?.dispose();
+                                _previewController = null;
+                                _previewPath = null;
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(color: Colors.grey),
+            const SizedBox(height: 10),
+          ],
           if (_isLoading)
             const CircularProgressIndicator()
           else if (_videoPath == null) ...[

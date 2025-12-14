@@ -2071,6 +2071,11 @@ class ProImageEditorState extends State<ProImageEditor>
       builder: (context) {
         return VideoBubblePickerWidget(
           configs: configs,
+          videoLayers:
+              stateManager.activeLayers.whereType<VideoBubbleLayer>().toList(),
+          onDeleteLayer: (layer) {
+            removeLayer(layer);
+          },
           onVideoPicked: (path, duration, corner, scale) {
             final layer = VideoBubbleLayer(
               path: path,
