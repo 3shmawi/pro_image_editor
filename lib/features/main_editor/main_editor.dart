@@ -2038,6 +2038,12 @@ class ProImageEditorState extends State<ProImageEditor>
       builder: (context) {
         return AudioRecorderWidget(
           configs: configs,
+          audioLayers: stateManager.activeLayers
+              .whereType<AudioLayer>()
+              .toList(), // Pass existing audio layers
+          onDeleteLayer: (layer) {
+            removeLayer(layer); // Remove layer from editor
+          },
           onStop: (path, duration) {
             final layer = AudioLayer(
               path: path,

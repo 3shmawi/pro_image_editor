@@ -1,5 +1,8 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+
 import '/core/models/editor_configs/pro_image_editor_configs.dart';
+import '/core/models/layers/audio_layer.dart';
 import '../controllers/audio_recorder_controller.dart';
 
 /// A value notifier for keeping the original audio.
@@ -13,6 +16,8 @@ class AudioRecorderWidget extends StatefulWidget {
     super.key,
     required this.configs,
     required this.onStop,
+    this.audioLayers,
+    this.onDeleteLayer,
   });
 
   /// The editor configurations.
@@ -21,22 +26,38 @@ class AudioRecorderWidget extends StatefulWidget {
   /// Callback when recording stops.
   final Function(String path, Duration duration) onStop;
 
+  /// List of existing audio layers.
+  final List<AudioLayer>? audioLayers;
+
+  /// Callback when an audio layer is deleted.
+  final Function(AudioLayer layer)? onDeleteLayer;
+
   @override
   State<AudioRecorderWidget> createState() => _AudioRecorderWidgetState();
 }
 
 class _AudioRecorderWidgetState extends State<AudioRecorderWidget> {
   late final AudioRecorderController _controller;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _playingAudioPath;
 
   @override
   void initState() {
     super.initState();
     _controller = AudioRecorderController();
+    _audioPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() {
+          _playingAudioPath = null;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -45,6 +66,20 @@ class _AudioRecorderWidgetState extends State<AudioRecorderWidget> {
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return '$minutes:$seconds';
+  }
+
+  Future<void> _playAudio(String path) async {
+    if (_playingAudioPath == path) {
+      await _audioPlayer.pause();
+      setState(() {
+        _playingAudioPath = null;
+      });
+    } else {
+      await _audioPlayer.play(DeviceFileSource(path));
+      setState(() {
+        _playingAudioPath = path;
+      });
+    }
   }
 
   @override
@@ -61,6 +96,64 @@ class _AudioRecorderWidgetState extends State<AudioRecorderWidget> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.audioLayers != null &&
+                  widget.audioLayers!.isNotEmpty) ...[
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: widget.audioLayers!.length,
+                    itemBuilder: (context, index) {
+                      final layer = widget.audioLayers![index];
+                      return ListTile(
+                        leading: Text(
+                          '${index + 1}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        title: Text(
+                          'Audio ${index + 1}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          '${_formatDuration(Duration(milliseconds: layer.startTime))} - '
+                          '${_formatDuration(Duration(milliseconds: layer.endTime))}',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                _playingAudioPath == layer.path
+                                    ? Icons.pause
+                                    : Icons.play_arrow,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => _playAudio(layer.path),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete,
+                                color: Colors.red,
+                              ),
+                              onPressed: () {
+                                widget.onDeleteLayer?.call(layer);
+                                setState(() {
+                                  widget.audioLayers?.remove(layer);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const Divider(color: Colors.grey),
+                const SizedBox(height: 10),
+              ],
               Text(
                 _formatDuration(_controller.duration),
                 style: const TextStyle(
