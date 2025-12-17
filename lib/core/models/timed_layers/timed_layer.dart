@@ -106,8 +106,8 @@ class TimedLayer extends Layer {
     switch (map[keyConverter('type')]) {
       case 'timedText':
         return TimedTextLayer.fromMap(layer, map, keyConverter: keyConverter);
-      case 'timedEmoji':
-        return TimedEmojiLayer.fromMap(layer, map, keyConverter: keyConverter);
+      // case 'timedEmoji':
+      //   return TimedEmojiLayer.fromMap(layer, map, keyConverter: keyConverter);
       case 'timedPaint':
         return TimedPaintLayer.fromMap(layer, map, minifier: minifier);
       case 'timedWidget':
