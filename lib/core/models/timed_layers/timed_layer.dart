@@ -10,12 +10,12 @@ import '/shared/utils/parser/double_parser.dart';
 import '../editor_image.dart';
 import '../layers/layer.dart';
 import '../layers/layer_interaction.dart';
-import 'timed_emoji_layer.dart';
+// import 'timed_emoji_layer.dart';
 import 'timed_paint_layer.dart';
 import 'timed_text_layer.dart';
 import 'timed_widget_layer.dart';
 
-export 'timed_emoji_layer.dart';
+// export 'timed_emoji_layer.dart';
 export 'timed_paint_layer.dart';
 export 'timed_text_layer.dart';
 export 'timed_widget_layer.dart';
