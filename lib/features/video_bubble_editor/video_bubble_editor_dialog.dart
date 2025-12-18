@@ -1,27 +1,28 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:video_player/video_player.dart';
 
-import '/core/models/layers/audio_layer.dart';
+import '/core/models/layers/video_bubble_layer.dart';
 import '/shared/widgets/video/select_timmer_range/video_editor_select_range_thumbnails.dart';
 
-/// A dialog for editing audio layer properties.
+/// A dialog for editing video bubble layer properties.
 ///
-/// This dialog allows users to adjust the start time of an audio layer,
-/// view its duration, and delete the layer if needed.
-class AudioEditorDialog extends StatefulWidget {
-  /// Creates an [AudioEditorDialog].
-  const AudioEditorDialog({
+/// This dialog allows users to adjust the start time of a video bubble layer,
+/// view its duration, preview the video, and delete the layer if needed.
+class VideoBubbleEditorDialog extends StatefulWidget {
+  /// Creates a [VideoBubbleEditorDialog].
+  const VideoBubbleEditorDialog({
     super.key,
-    required this.audioLayer,
+    required this.videoBubbleLayer,
     required this.totalDuration,
     required this.theme,
     this.thumbnails,
   });
 
-  /// The audio layer being edited.
-  final AudioLayer audioLayer;
+  /// The video bubble layer being edited.
+  final VideoBubbleLayer videoBubbleLayer;
 
-  /// The total duration of the video in milliseconds.
+  /// The total duration of the main video in milliseconds.
   final int totalDuration;
 
   /// The theme for styling the dialog.
@@ -31,41 +32,41 @@ class AudioEditorDialog extends StatefulWidget {
   final ValueNotifier<List<ImageProvider>?>? thumbnails;
 
   @override
-  State<AudioEditorDialog> createState() => _AudioEditorDialogState();
+  State<VideoBubbleEditorDialog> createState() => _VideoBubbleEditorDialogState();
 }
 
-class _AudioEditorDialogState extends State<AudioEditorDialog> {
+class _VideoBubbleEditorDialogState extends State<VideoBubbleEditorDialog> {
   late int _startTime;
   late final int _duration;
   bool _markedForDeletion = false;
   
-  // Audio player for preview
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  // Video player for preview
+  VideoPlayerController? _videoController;
   bool _isPlaying = false;
   bool _isLoading = false;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _duration = widget.audioLayer.duration;
+    _duration = widget.videoBubbleLayer.duration;
     // Clamp start time to ensure it's within valid range
     final maxStartTime = (widget.totalDuration - _duration).clamp(0, widget.totalDuration);
-    _startTime = widget.audioLayer.startTime.clamp(0, maxStartTime);
-    
-    // Listen to player state
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-        });
-      }
-    });
+    _startTime = widget.videoBubbleLayer.startTime.clamp(0, maxStartTime);
+    _toggleVideoPreview();
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _disposeVideoPlayer();
     super.dispose();
+  }
+
+  /// Disposes the video player.
+  Future<void> _disposeVideoPlayer() async {
+    await _videoController?.pause();
+    await _videoController?.dispose();
+    _videoController = null;
   }
 
   /// Gets the end time in milliseconds.
@@ -90,7 +91,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
     if (_markedForDeletion) {
       Navigator.of(context).pop('delete');
     } else {
-      final updatedLayer = widget.audioLayer.copyWith(
+      final updatedLayer = widget.videoBubbleLayer.copyWith(
         startTime: _startTime,
       );
       Navigator.of(context).pop(updatedLayer);
@@ -102,34 +103,73 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
   }
 
   void _handleDelete() {
-    _audioPlayer.stop();
+    _disposeVideoPlayer();
     setState(() {
       _markedForDeletion = true;
     });
   }
 
-  /// Toggles audio playback preview.
-  Future<void> _toggleAudioPreview() async {
-    if (_isPlaying) {
-      await _audioPlayer.stop();
+  /// Toggles video playback preview.
+  Future<void> _toggleVideoPreview() async {
+    if (_videoController != null) {
+      // If already initialized, just toggle play/pause
+      if (_isPlaying) {
+        await _videoController!.pause();
+        setState(() {
+          _isPlaying = false;
+        });
+      } else {
+        await _videoController!.play();
+        setState(() {
+          _isPlaying = true;
+        });
+      }
     } else {
+      // Initialize video player
       setState(() {
         _isLoading = true;
       });
       
       try {
-        await _audioPlayer.play(DeviceFileSource(widget.audioLayer.path));
+        _videoController = VideoPlayerController.file(
+          File(widget.videoBubbleLayer.path),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: true,
+          ),
+        );
+        
+        await _videoController!.initialize();
+        
+        // Add listener for play/pause state
+        _videoController!.addListener(() {
+          if (mounted && _videoController != null) {
+            final isPlaying = _videoController!.value.isPlaying;
+            if (_isPlaying != isPlaying) {
+              setState(() {
+                _isPlaying = isPlaying;
+              });
+            }
+          }
+        });
+        
+        setState(() {
+          _isInitialized = true;
+          _isLoading = false;
+        });
+        
+        // Start playing
+        await _videoController!.play();
+        setState(() {
+          _isPlaying = true;
+        });
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error playing audio: $e')),
-          );
-        }
-      } finally {
         if (mounted) {
           setState(() {
             _isLoading = false;
           });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading video: $e')),
+          );
         }
       }
     }
@@ -153,7 +193,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
             Row(
               children: [
                 Icon(
-                  Icons.audiotrack,
+                  Icons.video_library,
                   color: widget.theme.colorScheme.primary,
                   size: 28,
                 ),
@@ -163,14 +203,14 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Edit Audio Layer',
+                        'Edit Video Bubble Layer',
                         style: widget.theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _getFileName(widget.audioLayer.path),
+                        _getFileName(widget.videoBubbleLayer.path),
                         style: widget.theme.textTheme.bodySmall?.copyWith(
                           color: widget.theme.textTheme.bodySmall?.color,
                         ),
@@ -204,7 +244,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Delete this audio layer?',
+                      'Delete this video bubble layer?',
                       style: widget.theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: widget.theme.colorScheme.error,
@@ -225,7 +265,8 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Audio info card with preview button
+                  
+                  // Video info card with preview button
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -235,39 +276,23 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                     ),
                     child: Column(
                       children: [
-                        // Preview button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _isLoading ? null : _toggleAudioPreview,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.theme.colorScheme.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                            ),
-                            icon: _isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Icon(
-                                    _isPlaying ? Icons.stop : Icons.play_arrow,
-                                  ),
-                            label: Text(
-                              _isLoading
-                                  ? 'Loading...'
-                                  : (_isPlaying
-                                      ? 'Stop Preview'
-                                      : 'Preview Audio'),
-                            ),
+                        if (_isInitialized && _videoController != null)
+                        ListTile(
+                          title: SizedBox(
+                            height: 80,
+                            width: 80,
+                            child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: AspectRatio(
+                          aspectRatio: _videoController!.value.aspectRatio,
+                          child: VideoPlayer(_videoController!),
+                        ),
+                      ),
                           ),
+                      trailing: IconButton(
+                        onPressed: _toggleVideoPreview,
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                      ),
                         ),
                         const SizedBox(height: 16),
                         _buildInfoRow(
@@ -323,7 +348,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                             ),
                           ),
 
-                        // Audio layer bar
+                        // Video bubble layer bar
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final startPos = (_startTime / widget.totalDuration) *
@@ -337,17 +362,17 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                                 width: width.clamp(20.0, constraints.maxWidth),
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: widget.theme.colorScheme.primary
+                                  color: Colors.purple
                                       .withValues(alpha: 0.7),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
-                                    color: widget.theme.colorScheme.primary,
+                                    color: Colors.purple,
                                     width: 2,
                                   ),
                                 ),
                                 child: Center(
                                   child: Icon(
-                                    Icons.music_note,
+                                    Icons.video_library,
                                     color: Colors.white,
                                     size: 20,
                                   ),
@@ -381,7 +406,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Text(
-                        'Audio duration is equal to or exceeds the main video duration. Start time cannot be adjusted.',
+                        'Video bubble duration is equal to or exceeds the main video duration. Start time cannot be adjusted.',
                         style: widget.theme.textTheme.bodySmall?.copyWith(
                           color: widget.theme.colorScheme.error,
                           fontStyle: FontStyle.italic,
@@ -404,15 +429,7 @@ class _AudioEditorDialogState extends State<AudioEditorDialog> {
                     icon: const Icon(Icons.delete_outline),
                     color: widget.theme.colorScheme.error,
                   )
-                else
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _markedForDeletion = false;
-                      });
-                    },
-                    child: const Text('Cancel Delete'),
-                  ),
+               ,
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

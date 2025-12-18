@@ -13,11 +13,15 @@ import '/core/mixins/editor_configs_mixin.dart';
 import '/core/models/capture/layer_capture_result.dart';
 import '/core/models/styles/draggable_sheet_style.dart';
 import '/core/models/timed_layers/timed_layer.dart';
+import '/core/models/timed_layers/timed_paint_layer.dart';
+import '/core/models/timed_layers/timed_text_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/core/services/mouse_service.dart';
 import '/features/audio_editor/audio_editor_dialog.dart';
 import '/features/audio_editor/widgets/audio_recorder_widget.dart';
-import '/features/audio_editor/widgets/audio_timeline_bar.dart';
+import '/features/audio_editor/widgets/audio_timeline_bar.dart'
+    show LayersTimelineBar;
+import '/features/video_bubble_editor/video_bubble_editor_dialog.dart';
 import '/features/main_editor/widgets/main_editor_appbar.dart';
 import '/features/main_editor/widgets/main_editor_background_image.dart';
 import '/features/main_editor/widgets/main_editor_background_video.dart';
@@ -899,8 +903,7 @@ class ProImageEditorState extends State<ProImageEditor>
 
     widget.videoController!.initialize(
       configsFunction: () => configs.videoEditor,
-      callbacksFunction: () =>
-          callbacks.videoEditorCallbacks ?? VideoEditorCallbacks(),
+      callbacksFunction: () => callbacks.videoEditorCallbacks ?? VideoEditorCallbacks(),
     );
 
     final resolution = widget.videoController!.initialResolution;
@@ -1542,6 +1545,72 @@ class ProImageEditorState extends State<ProImageEditor>
     if (result is AudioLayer) {
       int i = activeLayers.indexWhere((element) => element.id == layerData.id);
       replaceLayer(index: i, layer: result);
+    }
+  }
+
+  /// Handles tap events on video bubble layers.
+  ///
+  /// This method opens a video bubble editor dialog for the specified video bubble layer
+  /// and updates the layer's properties based on the user's input.
+  ///
+  /// [layerData] - The video bubble layer data to be edited.
+  void _onVideoBubbleLayerTap(VideoBubbleLayer layerData) async {
+    // Get total duration from video controller or use a default
+    final totalDuration = _isVideoEditor
+        ? widget.videoController?.videoDuration.inMilliseconds ?? 10000
+        : 10000;
+
+    final result = await showDialog(
+      context: context,
+      builder: (context) => VideoBubbleEditorDialog(
+        videoBubbleLayer: layerData,
+        totalDuration: totalDuration,
+        theme: _theme,
+        thumbnails: widget.videoController?.thumbnailsNotifier,
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    // Handle deletion
+    if (result == 'delete') {
+      removeLayer(layerData);
+      return;
+    }
+
+    // Handle update
+    if (result is VideoBubbleLayer) {
+      int i = activeLayers.indexWhere((element) => element.id == layerData.id);
+      replaceLayer(index: i, layer: result);
+    }
+  }
+
+  /// Handles tap events on any timed layer from the timeline.
+  ///
+  /// This method determines the layer type and performs the appropriate action:
+  /// - Audio layers: Opens audio editor dialog with preview
+  /// - Video bubble layers: Opens video bubble editor dialog with preview
+  /// - Timed text layers: Seeks to start time and opens text editor
+  /// - Timed paint layers: Seeks to start time
+  ///
+  /// [layer] - The layer that was tapped.
+  void _onTimelineLayerTap(Layer layer) async {
+    if (layer is AudioLayer) {
+      _onAudioLayerTap(layer);
+    } else if (layer is VideoBubbleLayer) {
+      _onVideoBubbleLayerTap(layer);
+    } else if (layer is TimedTextLayer) {
+      // Seek to the layer's start time
+      if (_isVideoEditor && widget.videoController != null) {
+        await widget.videoController!.seekTo(Duration(milliseconds: layer.startTime));
+        widget.videoController!.pause();
+      }
+    } else if (layer is TimedPaintLayer) {
+      // Seek to the layer's start time
+      if (_isVideoEditor && widget.videoController != null) {
+        await widget.videoController!.seekTo(Duration(milliseconds: layer.startTime));
+        widget.videoController!.pause();
+      }
     }
   }
 
@@ -3406,9 +3475,17 @@ class ProImageEditorState extends State<ProImageEditor>
 
     if (shouldHide) return null;
 
-    // Get audio layers
+    // Get timed layers
     final audioLayers = activeLayers.whereType<AudioLayer>().toList();
-    final hasAudioLayers = audioLayers.isNotEmpty && _isVideoEditor;
+    final timedTextLayers = activeLayers.whereType<TimedTextLayer>().toList();
+    final timedPaintLayers = activeLayers.whereType<TimedPaintLayer>().toList();
+    final videoBubbleLayers = activeLayers.whereType<VideoBubbleLayer>().toList();
+    
+    final hasTimedLayers = _isVideoEditor && 
+        (audioLayers.isNotEmpty || 
+         timedTextLayers.isNotEmpty || 
+         timedPaintLayers.isNotEmpty || 
+         videoBubbleLayers.isNotEmpty);
 
     final bottomBar = MainEditorBottombar(
       controllers: _controllers,
@@ -3429,19 +3506,22 @@ class ProImageEditorState extends State<ProImageEditor>
       openVideoBubbleEditor: _isVideoEditor ? openVideoBubbleEditor : null,
     );
 
-    // If no audio layers, just return the bottom bar
-    if (!hasAudioLayers) return bottomBar;
+    // If no timed layers, just return the bottom bar
+    if (!hasTimedLayers) return bottomBar;
 
-    // Otherwise, wrap with audio timeline
+    // Otherwise, wrap with layers timeline
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AudioTimelineBar(
+        LayersTimelineBar(
           audioLayers: audioLayers,
+          timedTextLayers: timedTextLayers,
+          timedPaintLayers: timedPaintLayers,
+          videoBubbleLayers: videoBubbleLayers,
           totalDuration:
               widget.videoController?.videoDuration.inMilliseconds ?? 10000,
           currentTimeNotifier: widget.videoController!.playTimeNotifier,
-          onAudioLayerTap: _onAudioLayerTap,
+          onLayerTap: _onTimelineLayerTap,
           theme: _theme,
           thumbnails: widget.videoController?.thumbnailsNotifier,
         ),

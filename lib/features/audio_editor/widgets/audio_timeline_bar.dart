@@ -1,27 +1,43 @@
 import 'package:flutter/material.dart';
 
 import '/core/models/layers/audio_layer.dart';
+import '/core/models/layers/layer.dart';
+import '/core/models/layers/video_bubble_layer.dart';
+import '/core/models/timed_layers/timed_paint_layer.dart';
+import '/core/models/timed_layers/timed_text_layer.dart';
 import '/shared/widgets/video/select_timmer_range/video_editor_select_range_thumbnails.dart';
 
-/// A timeline widget for visualizing and managing multiple audio layers.
+/// A timeline widget for visualizing and managing all timed layers.
 ///
-/// This widget provides a professional timeline interface showing all audio
-/// layers with their start times, durations, and positions relative to the
-/// video timeline.
-class AudioTimelineBar extends StatelessWidget {
-  /// Creates an [AudioTimelineBar] widget.
-  const AudioTimelineBar({
+/// This widget provides a professional timeline interface showing all timed
+/// layers (audio, text, paint, and video bubble) with their start times,
+/// durations, and positions relative to the video timeline.
+class LayersTimelineBar extends StatelessWidget {
+  /// Creates a [LayersTimelineBar] widget.
+  const LayersTimelineBar({
     super.key,
     required this.audioLayers,
     required this.totalDuration,
     required this.currentTimeNotifier,
-    required this.onAudioLayerTap,
+    required this.onLayerTap,
     required this.theme,
     this.thumbnails,
+    this.timedTextLayers = const [],
+    this.timedPaintLayers = const [],
+    this.videoBubbleLayers = const [],
   });
 
   /// List of audio layers to display.
   final List<AudioLayer> audioLayers;
+
+  /// List of timed text layers to display.
+  final List<TimedTextLayer> timedTextLayers;
+
+  /// List of timed paint layers to display.
+  final List<TimedPaintLayer> timedPaintLayers;
+
+  /// List of video bubble layers to display.
+  final List<VideoBubbleLayer> videoBubbleLayers;
 
   /// The total duration of the video in milliseconds.
   final int totalDuration;
@@ -29,8 +45,9 @@ class AudioTimelineBar extends StatelessWidget {
   /// The current playback time notifier in Duration.
   final ValueNotifier<Duration> currentTimeNotifier;
 
-  /// Callback when an audio layer is tapped.
-  final ValueChanged<AudioLayer> onAudioLayerTap;
+  /// Callback when any layer is tapped.
+  /// The callback receives the tapped layer.
+  final ValueChanged<Layer> onLayerTap;
 
   /// The theme for styling the timeline.
   final ThemeData theme;
@@ -52,24 +69,31 @@ class AudioTimelineBar extends StatelessWidget {
     return parts.isNotEmpty ? parts.last : path;
   }
 
-  /// Generates a color for an audio layer based on its index.
-  Color _getLayerColor(int index) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.pink,
-      Colors.amber,
-      Colors.cyan,
-    ];
-    return colors[index % colors.length];
+  /// Calculates the timeline height based on the number of layers.
+  /// Ensures each layer has enough space.
+  double _calculateTimelineHeight(int totalLayers) {
+    const double layerHeight = 28.0;
+    const double layerSpacing = 4.0;
+    const double minTimelineHeight = 80.0;
+    const double paddingBottom = 8.0;
+    
+    // Calculate total height needed for all layers
+    final calculatedHeight = (totalLayers * (layerHeight + layerSpacing)) + paddingBottom;
+    
+    // Return at least minimum height, or calculated height
+    return calculatedHeight.clamp(minTimelineHeight, double.infinity);
   }
+
 
   @override
   Widget build(BuildContext context) {
-    if (audioLayers.isEmpty) {
+    // Calculate total number of timed layers
+    final totalLayers = audioLayers.length + 
+                       timedTextLayers.length + 
+                       timedPaintLayers.length + 
+                       videoBubbleLayers.length;
+
+    if (totalLayers == 0) {
       return const SizedBox.shrink();
     }
 
@@ -90,6 +114,7 @@ class AudioTimelineBar extends StatelessWidget {
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               // Header
               Container(
@@ -97,18 +122,15 @@ class AudioTimelineBar extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.audiotrack,
+                      Icons.layers,
                       size: 20,
                       color: theme.colorScheme.primary,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Audio Layers (${audioLayers.length})',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                
+                    _buildLayerCountChips(),
                     const Spacer(),
+                    const SizedBox(width: 16),
                     Text(
                       _formatTime(currentTimeMs),
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -120,78 +142,77 @@ class AudioTimelineBar extends StatelessWidget {
                 ),
               ),
 
-              // Timeline view
-              Container(
-                height: 120,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Column(
-                  children: [
-                    // Thumbnail background
-                    if (thumbnails != null)
-                      SizedBox(
-                        height: 40,
-                        child: ValueListenableBuilder<List<ImageProvider>?>(
-                          valueListenable: thumbnails!,
-                          builder: (context, thumbs, _) {
-                            if (thumbs == null || thumbs.isEmpty) {
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black26,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
+              // Timeline view - Scrollable
+              SizedBox(
+                height: _calculateTimelineHeight(totalLayers) +40, // Fixed outer height
+                child: SingleChildScrollView( 
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // Thumbnail background
+                      if (thumbnails != null)
+                        SizedBox(
+                          height: 40,
+                          child: ValueListenableBuilder<List<ImageProvider>?>(
+                            valueListenable: thumbnails!,
+                            builder: (context, thumbs, _) {
+                              if (thumbs == null || thumbs.isEmpty) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                );
+                              }
+                              return VideoEditorSelectRangeThumbnailBar(
+                                thumbnails: thumbnails,
+                                height: 40,
+                                borderRadius: 4,
                               );
-                            }
-                            return VideoEditorSelectRangeThumbnailBar(
-                              thumbnails: thumbnails,
-                              height: 40,
-                              borderRadius: 4,
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-
-                    // Audio layers
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          // Background grid
-                          CustomPaint(
-                            size: const Size(double.infinity, double.infinity),
-                            painter: _TimelineGridPainter(
-                              totalDuration: totalDuration,
-                              theme: theme,
-                            ),
+                            },
                           ),
+                        ),
+                      const SizedBox(height: 8),
 
-                          // Current time indicator
-                          if (totalDuration > 0)
-                            Positioned(
-                              left: (currentTimeMs / totalDuration) *
-                                  (MediaQuery.of(context).size.width - 32),
-                              top: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 2,
-                                color: theme.colorScheme.error,
+                      // All timed layers - Dynamic height based on layer count
+                      SizedBox(
+                        height: _calculateTimelineHeight(totalLayers),
+                        child: Stack(
+                          children: [
+                            // Background grid
+                            CustomPaint(
+                              size: Size(
+                                MediaQuery.of(context).size.width - 32,
+                                _calculateTimelineHeight(totalLayers),
+                              ),
+                              painter: _TimelineGridPainter(
+                                totalDuration: totalDuration,
+                                theme: theme,
                               ),
                             ),
 
-                          // Audio layer bars
-                          ...audioLayers.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final layer = entry.value;
-                            return _buildAudioLayerBar(
-                              context,
-                              layer,
-                              index,
-                              audioLayers.length,
-                            );
-                          }),
-                        ],
+                            // Current time indicator
+                            if (totalDuration > 0)
+                              Positioned(
+                                left: (currentTimeMs / totalDuration) *
+                                    (MediaQuery.of(context).size.width - 32),
+                                top: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 2,
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+
+                            // All layer bars
+                            ..._buildAllLayerBars(context, totalLayers),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -201,52 +222,210 @@ class AudioTimelineBar extends StatelessWidget {
     );
   }
 
-  Widget _buildAudioLayerBar(
-    BuildContext context,
-    AudioLayer layer,
-    int index,
-    int totalLayers,
-  ) {
-    final screenWidth = MediaQuery.of(context).size.width - 32;
-    final startPosition = (layer.startTime / totalDuration) * screenWidth;
-    final width = (layer.duration / totalDuration) * screenWidth;
-    final layerColor = _getLayerColor(index);
+  /// Builds small chips showing count of each layer type.
+  Widget _buildLayerCountChips() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (audioLayers.isNotEmpty)
+          _buildCountChip(
+            icon: Icons.audiotrack,
+            count: audioLayers.length,
+            color: Colors.blue,
+          ),
+        if (timedTextLayers.isNotEmpty) ...[
+          const SizedBox(width: 4),
+          _buildCountChip(
+            icon: Icons.text_fields,
+            count: timedTextLayers.length,
+            color: Colors.green,
+          ),
+        ],
+        if (timedPaintLayers.isNotEmpty) ...[
+          const SizedBox(width: 4),
+          _buildCountChip(
+            icon: Icons.brush,
+            count: timedPaintLayers.length,
+            color: Colors.orange,
+          ),
+        ],
+        if (videoBubbleLayers.isNotEmpty) ...[
+          const SizedBox(width: 4),
+          _buildCountChip(
+            icon: Icons.video_library,
+            count: videoBubbleLayers.length,
+            color: Colors.purple,
+          ),
+        ],
+      ],
+    );
+  }
 
-    // Calculate vertical position - stack layers
-    final layerHeight = 60.0 / totalLayers.clamp(1, 3);
-    final topPosition = (index % 3) * layerHeight;
+  /// Builds a small chip showing layer type and count.
+  Widget _buildCountChip({
+    required IconData icon,
+    required int count,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds all layer bars from different layer types.
+  List<Widget> _buildAllLayerBars(BuildContext context, int totalLayers) {
+    final List<Widget> layerBars = [];
+    int globalIndex = 0;
+
+    // Add audio layers
+    for (int i = 0; i < audioLayers.length; i++) {
+      layerBars.add(
+        _buildTimedLayerBar(
+          context: context,
+          startTime: audioLayers[i].startTime,
+          duration: audioLayers[i].duration,
+          label: _getFileName(audioLayers[i].path),
+          icon: Icons.music_note,
+          color: Colors.blue,
+          index: globalIndex,
+          totalLayers: totalLayers,
+          onTap: () => onLayerTap(audioLayers[i]),
+        ),
+      );
+      globalIndex++;
+    }
+
+    // Add timed text layers
+    for (int i = 0; i < timedTextLayers.length; i++) {
+      layerBars.add(
+        _buildTimedLayerBar(
+          context: context,
+          startTime: timedTextLayers[i].startTime,
+          duration: timedTextLayers[i].duration,
+          label: timedTextLayers[i].text.length > 20 
+              ? '${timedTextLayers[i].text.substring(0, 20)}...'
+              : timedTextLayers[i].text,
+          icon: Icons.text_fields,
+          color: Colors.green,
+          index: globalIndex,
+          totalLayers: totalLayers,
+          onTap: () => onLayerTap(timedTextLayers[i]),
+        ),
+      );
+      globalIndex++;
+    }
+
+    // Add timed paint layers
+    for (int i = 0; i < timedPaintLayers.length; i++) {
+      layerBars.add(
+        _buildTimedLayerBar(
+          context: context,
+          startTime: timedPaintLayers[i].startTime,
+          duration: timedPaintLayers[i].duration,
+          label: 'Drawing ${i + 1}',
+          icon: Icons.brush,
+          color: Colors.orange,
+          index: globalIndex,
+          totalLayers: totalLayers,
+          onTap: () => onLayerTap(timedPaintLayers[i]),
+        ),
+      );
+      globalIndex++;
+    }
+
+    // Add video bubble layers
+    for (int i = 0; i < videoBubbleLayers.length; i++) {
+      layerBars.add(
+        _buildTimedLayerBar(
+          context: context,
+          startTime: videoBubbleLayers[i].startTime,
+          duration: videoBubbleLayers[i].duration,
+          label: _getFileName(videoBubbleLayers[i].path),
+          icon: Icons.video_library,
+          color: Colors.purple,
+          index: globalIndex,
+          totalLayers: totalLayers,
+          onTap: () => onLayerTap(videoBubbleLayers[i]),
+        ),
+      );
+      globalIndex++;
+    }
+
+    return layerBars;
+  }
+
+  /// Builds a timed layer bar for any layer type.
+  Widget _buildTimedLayerBar({
+    required BuildContext context,
+    required int startTime,
+    required int duration,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required int index,
+    required int totalLayers,
+    required VoidCallback onTap,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width - 32;
+    final startPosition = (startTime / totalDuration) * screenWidth;
+    final width = (duration / totalDuration) * screenWidth;
+
+    // Calculate vertical position with better spacing
+    const double layerHeight = 28.0; // Increased from ~20 to 28 for better visibility
+    const double layerSpacing = 4.0;
+    final topPosition = index * (layerHeight + layerSpacing);
 
     return Positioned(
-      left: startPosition,
+      left: startPosition.clamp(0.0, screenWidth - 40),
       top: topPosition,
       child: GestureDetector(
-        onTap: () => onAudioLayerTap(layer),
+        onTap: onTap,
         child: Container(
           width: width.clamp(40.0, screenWidth),
-          height: layerHeight - 4,
+          height: layerHeight,
           decoration: BoxDecoration(
-            color: layerColor.withValues(alpha: 0.7),
+            color: color.withOpacity(0.7),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: layerColor,
+              color: color,
               width: 2,
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             child: Row(
               children: [
                 Icon(
-                  Icons.music_note,
-                  size: 12,
+                  icon,
+                  size: 14,
                   color: Colors.white,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    _getFileName(layer.path),
+                    label,
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),

@@ -166,17 +166,29 @@ class _MainEditorLayersState extends State<MainEditorLayers> {
                       widget.onCheckInteractiveViewer();
                       setState(() {});
                     },
-                    child: Stack(
-                      children: [
-                        for (Layer layer in widget.activeLayers)
-                          if (layer is! AudioLayer &&
-                              (widget.videoController == null ||
-                                  layer is! TimedLayer ||
-                                  layer.isVisibleAtTime(widget.videoController!
-                                      .playTimeNotifier.value.inMilliseconds)))
-                            _buildLayerWidget(layer)
-                      ],
-                    ),
+                    child: widget.videoController != null
+                        ? ValueListenableBuilder<Duration>(
+                            valueListenable:
+                                widget.videoController!.playTimeNotifier,
+                            builder: (context, playTime, child) {
+                              return Stack(
+                                children: [
+                                  for (Layer layer in widget.activeLayers)
+                                    if (layer is! AudioLayer &&
+                                        (layer is! TimedLayer ||
+                                            layer.isVisibleAtTime(
+                                                playTime.inMilliseconds)))
+                                      _buildLayerWidget(layer)
+                                ],
+                              );
+                            },
+                          )
+                        : Stack(
+                            children: [
+                              for (Layer layer in widget.activeLayers)
+                                if (layer is! AudioLayer) _buildLayerWidget(layer)
+                            ],
+                          ),
                   );
                 },
               ),
