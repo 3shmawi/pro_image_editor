@@ -188,4 +188,19 @@ class ProVideoController {
   void setPlayTime(Duration duration) {
     playTimeNotifier.value = duration;
   }
+
+  /// Seeks to a specific position in the video.
+  ///
+  /// This method calls the onSeek callback if provided, which should handle
+  /// the actual seeking operation in the underlying video player.
+  /// It also updates the playTimeNotifier to reflect the new position.
+  Future<void> seekTo(Duration position) async {
+    // Update the play time notifier first
+    setPlayTime(position);
+    
+    // Call the seek callback if provided
+    if (callbacks.onSeek != null) {
+      await callbacks.onSeek!(position);
+    }
+  }
 }
