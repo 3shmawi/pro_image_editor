@@ -160,7 +160,7 @@ class MainEditorBottombar extends StatelessWidget {
             case SubEditorMode.paint:
               return _buildActionButton(
                 key: const ValueKey('open-paint-editor-btn'),
-                label: 'Paint', // TODO: Add to i18n
+                label: 'Timed Paint', // TODO: Add to i18n
                 icon: Icons.brush,
                 onPressed: openPaintEditor,
               );
@@ -177,7 +177,7 @@ class MainEditorBottombar extends StatelessWidget {
               if (openTimedTextEditor == null) return null;
               return _buildActionButton(
                 key: const ValueKey('open-timed-text-editor-btn'),
-                label: 'Timed Text2', // TODO: Add to i18n
+                label: 'Timed Text', // TODO: Add to i18n
                 icon: Icons.text_fields_outlined,
                 onPressed: openTimedTextEditor!,
               );
