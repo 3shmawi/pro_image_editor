@@ -16,6 +16,7 @@ class VideoBubblePickerWidget extends StatefulWidget {
     required this.onVideoPicked,
     this.videoLayers,
     this.onDeleteLayer,
+    this.preloadedVideoPath,
   });
 
   /// The editor configurations.
@@ -35,6 +36,10 @@ class VideoBubblePickerWidget extends StatefulWidget {
   /// Callback when a video bubble layer is deleted.
   final Function(VideoBubbleLayer layer)? onDeleteLayer;
 
+  /// Optional preloaded video path (e.g., from camera recording).
+  /// When provided, the widget will automatically load this video.
+  final String? preloadedVideoPath;
+
   @override
   State<VideoBubblePickerWidget> createState() =>
       _VideoBubblePickerWidgetState();
@@ -47,8 +52,41 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
   String? _videoPath;
   String? _previewPath;
   VideoBubbleCorner _selectedCorner = VideoBubbleCorner.bottomRight;
-  double _bubbleScale = 0.25;
+  double _bubbleScale = 0.15;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // If a preloaded video path is provided (e.g., from camera),
+    // automatically load it
+    if (widget.preloadedVideoPath != null) {
+      _loadPreloadedVideo();
+    }
+  }
+
+  Future<void> _loadPreloadedVideo() async {
+    setState(() => _isLoading = true);
+
+    try {
+      _videoPath = widget.preloadedVideoPath;
+
+      _videoController = VideoPlayerController.file(
+        File(_videoPath!),
+      );
+
+      await _videoController!.initialize();
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading video: $e')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -58,11 +96,17 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
   }
 
   Future<void> _pickVideo(ImageSource source) async {
+    // For camera source, we need to handle the activity switch differently
+    // to prevent the bottom sheet from losing state
+    if (source == ImageSource.camera) {
+      await _pickVideoFromCamera();
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final XFile? video = await _picker.pickVideo(
-          source: source, preferredCameraDevice: CameraDevice.front);
+      final XFile? video = await _picker.pickVideo(source: source);
 
       if (video != null) {
         _videoPath = video.path;
@@ -86,6 +130,13 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
         );
       }
     }
+  }
+
+  /// Picks video from camera by first closing the bottom sheet,
+  /// then opening the camera, to avoid state loss on some devices.
+  Future<void> _pickVideoFromCamera() async {
+    // Pop the bottom sheet and return a special marker to indicate camera mode
+    Navigator.of(context).pop({'action': 'camera'});
   }
 
   Future<void> _playPreview(String path) async {
@@ -156,13 +207,18 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
                     leading: isPreviewing &&
                             _previewController != null &&
                             _previewController!.value.isInitialized
-                        ? SizedBox(
-                            width: 50,
-                            height: 50,
-                            child: AspectRatio(
-                              aspectRatio:
-                                  _previewController!.value.aspectRatio,
-                              child: VideoPlayer(_previewController!),
+                        ? ClipOval(
+                            child: SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: _previewController!.value.size.width,
+                                  height: _previewController!.value.size.height,
+                                  child: VideoPlayer(_previewController!),
+                                ),
+                              ),
                             ),
                           )
                         : const Icon(Icons.videocam, color: Colors.white),
@@ -239,18 +295,34 @@ class _VideoBubblePickerWidgetState extends State<VideoBubblePickerWidget> {
               ],
             ),
           ] else ...[
-            // Video preview
+            // Video preview (circular bubble preview)
             if (_videoController != null &&
                 _videoController!.value.isInitialized)
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.black,
-                ),
-                child: AspectRatio(
-                  aspectRatio: _videoController!.value.aspectRatio,
-                  child: VideoPlayer(_videoController!),
+              Center(
+                child: Container(
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: _videoController!.value.size.width,
+                        height: _videoController!.value.size.height,
+                        child: VideoPlayer(_videoController!),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             const SizedBox(height: 20),

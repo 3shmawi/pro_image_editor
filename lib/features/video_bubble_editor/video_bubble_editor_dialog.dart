@@ -277,23 +277,32 @@ class _VideoBubbleEditorDialogState extends State<VideoBubbleEditorDialog> {
                     child: Column(
                       children: [
                         if (_isInitialized && _videoController != null)
-                        ListTile(
-                          title: SizedBox(
-                            height: 80,
-                            width: 80,
-                            child: ClipRRect(
-                        borderRadius: BorderRadius.circular(30),
-                        child: AspectRatio(
-                          aspectRatio: _videoController!.value.aspectRatio,
-                          child: VideoPlayer(_videoController!),
-                        ),
-                      ),
+                          ListTile(
+                            title: SizedBox(
+                              height: 80,
+                              width: 80,
+                              child: ClipOval(
+                                child: SizedBox(
+                                  width: 80,
+                                  height: 80,
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    child: SizedBox(
+                                      width: _videoController!.value.size.width,
+                                      height:
+                                          _videoController!.value.size.height,
+                                      child: VideoPlayer(_videoController!),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            trailing: IconButton(
+                              onPressed: _toggleVideoPreview,
+                              icon:
+                                  Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                            ),
                           ),
-                      trailing: IconButton(
-                        onPressed: _toggleVideoPreview,
-                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                      ),
-                        ),
                         const SizedBox(height: 16),
                         _buildInfoRow(
                           'Duration',
@@ -348,38 +357,47 @@ class _VideoBubbleEditorDialogState extends State<VideoBubbleEditorDialog> {
                             ),
                           ),
 
-                        // Video bubble layer bar
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final startPos = (_startTime / widget.totalDuration) *
-                                constraints.maxWidth;
-                            final width = (_duration / widget.totalDuration) *
-                                constraints.maxWidth;
-                            return Positioned(
-                              left: startPos,
-                              top: 10,
-                              child: Container(
-                                width: width.clamp(20.0, constraints.maxWidth),
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.purple
-                                      .withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: Colors.purple,
-                                    width: 2,
-                                  ),
+                        // Video bubble layer bar - use Row with flex for positioning
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(
+                            children: [
+                              // Left spacer (represents time before bubble starts)
+                              if (_startTime > 0)
+                                Flexible(
+                                  flex: _startTime,
+                                  child: const SizedBox(),
                                 ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.video_library,
-                                    color: Colors.white,
-                                    size: 20,
+                              // The bubble indicator
+                              Flexible(
+                                flex: _duration.clamp(1, widget.totalDuration),
+                                child: Container(
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.purple.withValues(alpha: 0.7),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.purple,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.video_library,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                   ),
                                 ),
                               ),
-                            );
-                          },
+                              // Right spacer (represents time after bubble ends)
+                              if (widget.totalDuration - _startTime - _duration > 0)
+                                Flexible(
+                                  flex: widget.totalDuration - _startTime - _duration,
+                                  child: const SizedBox(),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
