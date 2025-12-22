@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '/core/constants/editor_various_constants.dart';
 import '/core/constants/image_constants.dart';
@@ -13,15 +14,12 @@ import '/core/mixins/editor_configs_mixin.dart';
 import '/core/models/capture/layer_capture_result.dart';
 import '/core/models/styles/draggable_sheet_style.dart';
 import '/core/models/timed_layers/timed_layer.dart';
-import '/core/models/timed_layers/timed_paint_layer.dart';
-import '/core/models/timed_layers/timed_text_layer.dart';
 import '/core/services/gesture_manager.dart';
 import '/core/services/mouse_service.dart';
 import '/features/audio_editor/audio_editor_dialog.dart';
 import '/features/audio_editor/widgets/audio_recorder_widget.dart';
 import '/features/audio_editor/widgets/audio_timeline_bar.dart'
     show LayersTimelineBar;
-import '/features/video_bubble_editor/video_bubble_editor_dialog.dart';
 import '/features/main_editor/widgets/main_editor_appbar.dart';
 import '/features/main_editor/widgets/main_editor_background_image.dart';
 import '/features/main_editor/widgets/main_editor_background_video.dart';
@@ -30,6 +28,7 @@ import '/features/main_editor/widgets/main_editor_helper_lines.dart';
 import '/features/main_editor/widgets/main_editor_layers.dart';
 import '/features/main_editor/widgets/main_editor_remove_layer_area.dart';
 import '/features/timed_paint_editor/timed_paint_timing_dialog.dart';
+import '/features/video_bubble_editor/video_bubble_editor_dialog.dart';
 import '/features/video_bubble_editor/widgets/video_bubble_picker_widget.dart';
 import '/pro_image_editor.dart';
 import '/shared/mixins/editor_zoom.mixin.dart';
@@ -903,7 +902,8 @@ class ProImageEditorState extends State<ProImageEditor>
 
     widget.videoController!.initialize(
       configsFunction: () => configs.videoEditor,
-      callbacksFunction: () => callbacks.videoEditorCallbacks ?? VideoEditorCallbacks(),
+      callbacksFunction: () =>
+          callbacks.videoEditorCallbacks ?? VideoEditorCallbacks(),
     );
 
     final resolution = widget.videoController!.initialResolution;
@@ -1602,13 +1602,15 @@ class ProImageEditorState extends State<ProImageEditor>
     } else if (layer is TimedTextLayer) {
       // Seek to the layer's start time
       if (_isVideoEditor && widget.videoController != null) {
-        await widget.videoController!.seekTo(Duration(milliseconds: layer.startTime));
+        await widget.videoController!
+            .seekTo(Duration(milliseconds: layer.startTime));
         widget.videoController!.pause();
       }
     } else if (layer is TimedPaintLayer) {
       // Seek to the layer's start time
       if (_isVideoEditor && widget.videoController != null) {
-        await widget.videoController!.seekTo(Duration(milliseconds: layer.startTime));
+        await widget.videoController!
+            .seekTo(Duration(milliseconds: layer.startTime));
         widget.videoController!.pause();
       }
     }
@@ -2130,10 +2132,14 @@ class ProImageEditorState extends State<ProImageEditor>
   }
 
   /// Opens the video bubble editor.
-  void openVideoBubbleEditor() async {
+  ///
+  /// If the user selects camera, the bottom sheet closes first to avoid
+  /// state loss when the native camera activity takes over, then reopens
+  /// after recording.
+  void openVideoBubbleEditor({String? preloadedVideoPath}) async {
     if (widget.videoController == null) return;
 
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -2159,9 +2165,33 @@ class ProImageEditorState extends State<ProImageEditor>
             Navigator.pop(context);
             setState(() {});
           },
+          preloadedVideoPath: preloadedVideoPath,
         );
       },
     );
+
+    // Handle camera action - the picker closed itself to avoid state loss
+    // Now pick video from camera and re-open the picker with the result
+    if (result is Map && result['action'] == 'camera') {
+      final picker = ImagePicker();
+      try {
+        final XFile? video = await picker.pickVideo(
+          source: ImageSource.camera,
+          preferredCameraDevice: CameraDevice.front,
+        );
+
+        if (video != null && mounted) {
+          // Re-open the picker with the recorded video
+          openVideoBubbleEditor(preloadedVideoPath: video.path);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error recording video: $e')),
+          );
+        }
+      }
+    }
   }
 
   /// Opens the filter editor.
@@ -2668,17 +2698,32 @@ class ProImageEditorState extends State<ProImageEditor>
   /// only the background.
   /// [includeBackground] - Whether to include the background image. Set to false
   /// to capture layers on transparent background (useful for individual layer export).
+  /// [forcePlayTime] - Optional playback time to set for timed layer visibility.
+  /// If provided, this time will be used to determine which timed layers are
+  /// visible during capture. This is useful for capturing timed layers that
+  /// might not be visible at the current playback time.
+  /// [useFullResolution] - If true, captures at the original image resolution.
+  /// Defaults to true to preserve layer quality.
   ///
   /// Returns a [Uint8List] representing the image with only specified layers.
   Future<Uint8List> captureEditorImageWithLayers({
     List<String> visibleLayerIds = const [],
     bool includeBackground = true,
+    Duration? forcePlayTime,
+    bool useFullResolution = true,
   }) async {
     if (_imageInfos == null) await decodeImage();
     if (!mounted) return Uint8List.fromList([]);
 
     // Store original layers list
     final originalLayers = List<Layer>.from(activeLayers);
+
+    // Store original playback time if we need to force a different time
+    Duration? originalPlayTime;
+    if (forcePlayTime != null && widget.videoController != null) {
+      originalPlayTime = widget.videoController!.playTimeNotifier.value;
+      widget.videoController!.playTimeNotifier.value = forcePlayTime;
+    }
 
     // Create a temporary list with only visible layers
     final tempLayers = activeLayers
@@ -2700,9 +2745,22 @@ class ProImageEditorState extends State<ProImageEditor>
       // Capture with background
       imageBytes = await captureEditorImage();
     } else {
+      // For full resolution capture, we need to use imageInfos with proper
+      // pixel ratio to match the original image size
+      ImageInfos captureInfos = _imageInfos!;
+      if (useFullResolution) {
+        // Calculate pixel ratio to get full resolution output
+        // rawSize is the original image size, renderedSize is what's on screen
+        final fullResPixelRatio =
+            _imageInfos!.rawSize.width / _imageInfos!.renderedSize.width;
+        captureInfos = _imageInfos!.copyWith(
+          pixelRatio: fullResPixelRatio,
+        );
+      }
+
       // Capture only layers without background (transparent)
       imageBytes = await _controllers.screenshot.captureFinalScreenshot(
-            imageInfos: _imageInfos!,
+            imageInfos: captureInfos,
             backgroundScreenshot: null, // No background
             originalImageBytes: null, // No original image
           ) ??
@@ -2711,6 +2769,11 @@ class ProImageEditorState extends State<ProImageEditor>
 
     // Restore original layers
     stateManager.activeLayers = originalLayers;
+
+    // Restore original playback time if it was changed
+    if (originalPlayTime != null && widget.videoController != null) {
+      widget.videoController!.playTimeNotifier.value = originalPlayTime;
+    }
 
     // Restore UI
     setState(() {});
@@ -2737,10 +2800,16 @@ class ProImageEditorState extends State<ProImageEditor>
   ///
   /// [includeBackground] - Whether to include a 'background' entry with just
   /// the background image (no layers).
+  /// [useFullResolution] - If true, captures at the original image resolution.
+  /// Defaults to true to preserve layer quality.
   ///
   /// Returns a Map of layer ID to image bytes.
+  ///
+  /// For timed layers, this method automatically sets the playback time to be
+  /// within each layer's time range during capture.
   Future<Map<String, Uint8List>> captureLayersIndividually({
     bool includeBackground = true,
+    bool useFullResolution = true,
   }) async {
     final result = <String, Uint8List>{};
 
@@ -2748,14 +2817,24 @@ class ProImageEditorState extends State<ProImageEditor>
     if (includeBackground) {
       result['background'] = await captureEditorImageWithLayers(
         visibleLayerIds: [],
+        useFullResolution: useFullResolution,
       );
     }
 
     // Capture each layer individually (without background)
     for (var layer in activeLayers) {
+      // For timed layers, force the playback time to be within the layer's
+      // time range so it renders correctly
+      Duration? forcePlayTime;
+      if (layer is TimedLayer) {
+        forcePlayTime = Duration(milliseconds: layer.startTime);
+      }
+
       result[layer.id] = await captureEditorImageWithLayers(
         visibleLayerIds: [layer.id],
         includeBackground: false, // Capture layer only, transparent background
+        forcePlayTime: forcePlayTime,
+        useFullResolution: useFullResolution,
       );
     }
 
@@ -2783,10 +2862,23 @@ class ProImageEditorState extends State<ProImageEditor>
   /// ```
   ///
   /// [includeBackground] - Whether to include the background image.
+  /// [useFullResolution] - If true, captures at the original image resolution.
+  /// Defaults to true to preserve layer quality. Note: The output may still be
+  /// limited by `imageGeneration.maxOutputSize` in configs. Set it to
+  /// `Size.infinite` for truly unlimited resolution.
   ///
   /// Returns a [LayerCaptureCollection] containing all captured layers.
+  ///
+  /// For timed layers, this method automatically sets the playback time to be
+  /// within each layer's time range during capture, ensuring the layer is
+  /// visible regardless of the current playback position.
+  ///
+  /// Each [LayerCaptureResult] in the collection contains:
+  /// - The layer (with `startTime` and `endTime` if it's a [TimedLayer])
+  /// - The captured image bytes
   Future<LayerCaptureCollection> captureLayersAsCollection({
     bool includeBackground = true,
+    bool useFullResolution = true,
   }) async {
     final results = <LayerCaptureResult>[];
     Uint8List? background;
@@ -2795,15 +2887,28 @@ class ProImageEditorState extends State<ProImageEditor>
     if (includeBackground) {
       background = await captureEditorImageWithLayers(
         visibleLayerIds: [],
+        useFullResolution: useFullResolution,
       );
     }
 
     // Capture each layer individually (without background)
     for (var layer in activeLayers) {
-      if (layer is AudioLayer || layer is VideoBubbleLayer) continue;
+      if (layer is AudioLayer) continue;
+      if (layer is VideoBubbleLayer) continue;
+
+      // For timed layers, force the playback time to be within the layer's
+      // time range so it renders correctly
+      Duration? forcePlayTime;
+      if (layer is TimedLayer) {
+        // Set playback time to the layer's start time to ensure visibility
+        forcePlayTime = Duration(milliseconds: layer.startTime);
+      }
+
       final bytes = await captureEditorImageWithLayers(
         visibleLayerIds: [layer.id],
         includeBackground: false, // Capture layer only, transparent background
+        forcePlayTime: forcePlayTime,
+        useFullResolution: useFullResolution,
       );
 
       results.add(LayerCaptureResult(
@@ -2940,18 +3045,32 @@ class ProImageEditorState extends State<ProImageEditor>
   ///
   /// [layerId] - The ID of the layer to capture.
   /// [includeBackground] - Whether to include the background image.
+  /// [useFullResolution] - If true, captures at the original image resolution.
   ///
   /// Returns the captured image bytes, or null if the layer is not found.
+  ///
+  /// For timed layers, this method automatically sets the playback time to be
+  /// within the layer's time range during capture.
   Future<Uint8List?> captureLayerById(
     String layerId, {
     bool includeBackground = false,
+    bool useFullResolution = true,
   }) async {
     final layer = getLayerById(layerId);
     if (layer == null) return null;
 
+    // For timed layers, force the playback time to be within the layer's
+    // time range so it renders correctly
+    Duration? forcePlayTime;
+    if (layer is TimedLayer) {
+      forcePlayTime = Duration(milliseconds: layer.startTime);
+    }
+
     return await captureEditorImageWithLayers(
       visibleLayerIds: [layerId],
       includeBackground: includeBackground,
+      forcePlayTime: forcePlayTime,
+      useFullResolution: useFullResolution,
     );
   }
 
@@ -2975,11 +3094,16 @@ class ProImageEditorState extends State<ProImageEditor>
   ///
   /// [layerIds] - List of layer IDs to capture.
   /// [includeBackground] - Whether to include the background image in the result.
+  /// [useFullResolution] - If true, captures at the original image resolution.
   ///
   /// Returns a map of layer ID to image bytes.
+  ///
+  /// For timed layers, this method automatically sets the playback time to be
+  /// within each layer's time range during capture.
   Future<Map<String, Uint8List>> captureLayersByIds(
     List<String> layerIds, {
     bool includeBackground = true,
+    bool useFullResolution = true,
   }) async {
     final result = <String, Uint8List>{};
 
@@ -2987,6 +3111,7 @@ class ProImageEditorState extends State<ProImageEditor>
     if (includeBackground) {
       final background = await captureEditorImageWithLayers(
         visibleLayerIds: [],
+        useFullResolution: useFullResolution,
       );
       result['background'] = background;
     }
@@ -2995,10 +3120,19 @@ class ProImageEditorState extends State<ProImageEditor>
     for (final layerId in layerIds) {
       final layer = getLayerById(layerId);
       if (layer != null) {
+        // For timed layers, force the playback time to be within the layer's
+        // time range so it renders correctly
+        Duration? forcePlayTime;
+        if (layer is TimedLayer) {
+          forcePlayTime = Duration(milliseconds: layer.startTime);
+        }
+
         final bytes = await captureEditorImageWithLayers(
           visibleLayerIds: [layerId],
           includeBackground:
               false, // Capture layer only, transparent background
+          forcePlayTime: forcePlayTime,
+          useFullResolution: useFullResolution,
         );
         result[layerId] = bytes;
       }
@@ -3479,13 +3613,14 @@ class ProImageEditorState extends State<ProImageEditor>
     final audioLayers = activeLayers.whereType<AudioLayer>().toList();
     final timedTextLayers = activeLayers.whereType<TimedTextLayer>().toList();
     final timedPaintLayers = activeLayers.whereType<TimedPaintLayer>().toList();
-    final videoBubbleLayers = activeLayers.whereType<VideoBubbleLayer>().toList();
-    
-    final hasTimedLayers = _isVideoEditor && 
-        (audioLayers.isNotEmpty || 
-         timedTextLayers.isNotEmpty || 
-         timedPaintLayers.isNotEmpty || 
-         videoBubbleLayers.isNotEmpty);
+    final videoBubbleLayers =
+        activeLayers.whereType<VideoBubbleLayer>().toList();
+
+    final hasTimedLayers = _isVideoEditor &&
+        (audioLayers.isNotEmpty ||
+            timedTextLayers.isNotEmpty ||
+            timedPaintLayers.isNotEmpty ||
+            videoBubbleLayers.isNotEmpty);
 
     final bottomBar = MainEditorBottombar(
       controllers: _controllers,
