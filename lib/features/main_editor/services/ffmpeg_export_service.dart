@@ -454,9 +454,23 @@ class FfmpegExportService {
     final startTimeSec = startTime / 1000.0;
     final endTimeSec = (startTime + bubbleDuration) / 1000.0;
 
-    // Scale the bubble video and apply timing
-    // Use setpts to delay the bubble video start
+    // Scale the bubble video, make it circular, and apply timing
+    // 1. Scale the bubble video  
+    // 2. Crop to square (center crop using min dimension)
+    // 3. Add alpha channel with format=yuva420p
+    // 4. Use geq filter to create circular mask:
+    //    - Calculate distance from center: sqrt((X-W/2)^2 + (Y-H/2)^2)
+    //    - If distance > radius (W/2), set alpha=0 (transparent)
+    //    - Otherwise keep alpha=255 (opaque)
+    // 5. Apply setpts to delay the bubble start
     fc.write('[1:v]scale=iw*$bubbleScale:-1,');
+    // Crop to square using the smaller dimension, centered
+    // Note: Using expressions without quotes for FFmpeg compatibility
+    fc.write('crop=min(iw\\,ih):min(iw\\,ih):(iw-min(iw\\,ih))/2:(ih-min(iw\\,ih))/2,');
+    fc.write('format=yuva420p,');
+    // Now W and H are equal (square), so we can use W/2 as radius
+    fc.write(
+        "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(gt(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),0,255)',");
     fc.write('setpts=PTS+$startTimeSec/TB[bubv];');
 
     // Overlay with enable condition to show only during the specified time range
