@@ -26,6 +26,9 @@ enum EditorMode {
 
   /// The sticker editor.
   sticker,
+
+  /// The audio editor.
+  audio,
 }
 
 /// Defines the available sub-editor modes.
